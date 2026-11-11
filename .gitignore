@@ -1,0 +1,19 @@
+# Archivos propios de Claude
+CLAUDE.md
+CLAUDE.local.md
+.claude/
+session.restore
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+
+# Modelos y audio generados localmente
+models/
+*.onnx
+*.onnx.json
+*.wav
