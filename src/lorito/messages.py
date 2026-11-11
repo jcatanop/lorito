@@ -148,6 +148,7 @@ def spoken_version(version: str) -> str:
 QUIT_CONFIRM = ("Claude está trabajando y se detendría a medias. Pulsa cu otra vez para salir, "
                 "o cualquier otra tecla para seguir.")
 LINK_TO = "enlace a {domain}"
+SHORT_PATH = "{name}, en la carpeta {parent}"
 
 
 def permission_request(name: str, args: dict, description: str) -> tuple[str, str | None, str]:

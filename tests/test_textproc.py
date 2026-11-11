@@ -21,3 +21,26 @@ def test_code_blocks_are_announced_not_read():
 def test_inline_markdown_is_cleaned():
     spoken = markdown_to_speech("He cambiado **dos** archivos en `src/app.py` ✅ y [la guía](https://x.org/a).")
     assert spoken.paragraphs == ["He cambiado dos archivos en src/app.py y la guía."]
+
+
+def _spoken(text):
+    return " ".join(markdown_to_speech(text).paragraphs)
+
+
+def test_long_paths_are_shortened():
+    said = _spoken("Creé `/tmp/claude-1000/-media-data/scratchpad/probe/nota.txt`.")
+    assert said == "Creé nota.txt, en la carpeta probe."
+    assert _spoken("Mira ~/proyectos/lorito/README.md ahora") == \
+        "Mira README.md, en la carpeta lorito ahora"
+    assert _spoken("Revisa a/b/c/d.py") == "Revisa d.py, en la carpeta c"
+    assert _spoken("Está en /home/usuario/proyectos/") == \
+        "Está en proyectos, en la carpeta usuario"
+
+
+def test_short_paths_and_other_slashes_are_kept():
+    assert _spoken("Edita /etc/hosts y src/lorito/cli.py") == "Edita /etc/hosts y src/lorito/cli.py"
+    assert _spoken("A 90 km/h el 2026/11/11") == "A 90 km/h el 2026/11/11"
+
+
+def test_urls_are_not_treated_as_paths():
+    assert _spoken("Ver https://docs.astral.sh/uv/guides/tools/") == "Ver enlace a docs.astral.sh"

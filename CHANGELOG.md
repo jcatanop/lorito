@@ -13,6 +13,7 @@ La versión se define en un solo lugar: `src/lorito/__init__.py`.
 
 ### Corregido
 - Concurrencia: los mensajes de Claude, los anuncios diferidos, el dictado y el teclado ya no modifican el estado a la vez. Antes, una tecla pulsada justo cuando llegaba otra petición podía aprobar la petición equivocada o provocar un fallo.
+- Las rutas largas ya no se leen enteras: `/tmp/claude-1000/proyecto/src/nota.txt` se lee «nota.txt, en la carpeta src». Las cortas (`/etc/hosts`, `src/lorito/cli.py`) se mantienen, y la tecla D de los permisos sigue leyendo la ruta completa.
 
 ## [0.8.0] - 2026-11-11
 

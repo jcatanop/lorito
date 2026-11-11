@@ -21,6 +21,9 @@ _QUOTE = re.compile(r"^\s*>\s?")
 _HR = re.compile(r"^\s*([-*_])(\s*\1){2,}\s*$")
 _LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _URL = re.compile(r"https?://([^/\s)]+)[^\s)]*")
+# Rutas de archivo: componentes separados por "/", absolutas (/ o ~/) o relativas. El nombre
+# final no termina en punto, para no tragarse el de fin de frase.
+_PATH = re.compile(r"(?<![\w/.~-])(~?/)?((?:[\w.@+-]+/)+)([\w@+-]+(?:\.[\w@+-]+)*)?(/?)")
 _INLINE_CODE = re.compile(r"`([^`]+)`")
 _EMPHASIS = re.compile(r"(\*\*|__|\*|_|~~)(?=\S)(.+?)(?<=\S)\1")
 # Emojis y pictogramas: el sintetizador los lee mal o los ignora.
@@ -52,11 +55,23 @@ def clean_inline(text: str) -> str:
     text = _LINK.sub(lambda m: m.group(1), text)
     text = _URL.sub(lambda m: msg.LINK_TO.format(domain=m.group(1)), text)
     text = _INLINE_CODE.sub(lambda m: m.group(1), text)
+    text = _PATH.sub(_short_path, text)
     for _ in range(2):  # énfasis anidado, p. ej. ***texto***
         text = _EMPHASIS.sub(lambda m: m.group(2), text)
     text = _EMOJI.sub("", text)
     text = re.sub(r"[ \t]+", " ", text)
     return re.sub(r" ([.,;:!?])", r"\1", text).strip()
+
+
+def _short_path(m: re.Match) -> str:
+    """Una ruta larga se lee como «nombre, en la carpeta padre»: oír entera una ruta como
+    /tmp/claude-1000/proyecto/src/nota.txt es tedioso y no aporta. Las cortas se dejan."""
+    absolute, dirs, name = m.group(1), m.group(2).rstrip("/").split("/"), m.group(3)
+    if not name:  # termina en "/": es una carpeta
+        name, dirs = dirs[-1], dirs[:-1]
+    if len(dirs) < (2 if absolute else 3):
+        return m.group(0)
+    return msg.SHORT_PATH.format(name=name, parent=dirs[-1])
 
 
 def _table_row(line: str) -> str:
