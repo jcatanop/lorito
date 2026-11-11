@@ -94,22 +94,38 @@ class Speaker:
             self._voices[lang] = PiperVoice.load(model)
         return self._voices[lang]
 
+    def _detect(self, text: str) -> str | None:
+        if len(text) < MIN_DETECT_CHARS:
+            return None
+        found = self._detector.detect_language_of(text)
+        return found.iso_code_639_1.name.lower() if found else None
+
     def detect(self, text: str) -> str:
-        if len(text) >= MIN_DETECT_CHARS:
-            found = self._detector.detect_language_of(text)
-            if found is not None:
-                self._last_lang = found.iso_code_639_1.name.lower()
+        """Detecta el idioma de un texto largo del asistente (un mensaje completo) y lo
+        recuerda como idioma de referencia para los fragmentos cortos que vengan después."""
+        self._last_lang = self._detect(text) or self._last_lang
         return self._last_lang
 
+    def plan(self, paragraph: str, lang: str | None = None,
+             fallback: str | None = None) -> list[tuple[str, str]]:
+        """Divide un párrafo en frases y asigna el idioma de cada una. Las frases cortas
+        (números, "Listo.") toman el idioma del párrafo, o si también es corto, el de
+        `fallback` (el del mensaje completo) o el último idioma de referencia."""
+        sentences = split_sentences(paragraph)
+        if lang:
+            return [(s, lang) for s in sentences]
+        base = self._detect(paragraph) or fallback or self._last_lang
+        return [(s, self._detect(s) or base) for s in sentences]
+
     # ---- API pública -------------------------------------------------------
-    def say(self, paragraph: str, lang: str | None = None) -> None:
-        """Encola un párrafo. Si no se indica idioma, se detecta frase a frase
-        (las frases cortas heredan el idioma de la anterior)."""
+    def say(self, paragraph: str, lang: str | None = None, fallback: str | None = None) -> None:
+        """Encola un párrafo. Si no se indica idioma, se detecta frase a frase (ver `plan`)."""
+        items = self.plan(paragraph, lang, fallback)
         with self._lock:
             gen = self._gen
-            for sentence in split_sentences(paragraph):
+            for sentence, sentence_lang in items:
                 self._pending += 1
-                self._text_q.put(_Item(gen, sentence, lang or self.detect(sentence)))
+                self._text_q.put(_Item(gen, sentence, sentence_lang))
 
     def stop(self) -> None:
         """Calla de inmediato y descarta todo lo pendiente."""

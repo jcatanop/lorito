@@ -15,6 +15,8 @@ _FENCE = re.compile(r"^\s*(```|~~~)\s*([\w+#.-]*)\s*$")
 _TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$")
 _HEADING = re.compile(r"^\s{0,3}#{1,6}\s+")
 _BULLET = re.compile(r"^\s*[-*+]\s+(\[[ xX]\]\s+)?")
+_NUMBERED = re.compile(r"^\s*(\d+)[.)]\s+")
+_BARE_NUMBER = re.compile(r"^\(?\d+[.)]?$")
 _QUOTE = re.compile(r"^\s*>\s?")
 _HR = re.compile(r"^\s*([-*_])(\s*\1){2,}\s*$")
 _LINK = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
@@ -107,6 +109,12 @@ def markdown_to_speech(text: str) -> Spoken:
             flush()
             current.append(_end(clean_inline(_BULLET.sub("", line))))
             flush()
+        elif numbered := _NUMBERED.match(line):
+            flush()
+            # "1. Texto" se lee como "1: Texto" para que el número no parezca fin de frase.
+            item = clean_inline(line[numbered.end():])
+            current.append(_end(f"{numbered.group(1)}: {item}"))
+            flush()
         else:
             current.append(clean_inline(_QUOTE.sub("", line)))
         i += 1
@@ -125,7 +133,16 @@ def _end(text: str) -> str:
 def split_sentences(paragraph: str) -> list[str]:
     """Divide un párrafo en frases cortas para empezar a hablar cuanto antes."""
     chunks: list[str] = []
-    for sentence in _SENTENCE_END.split(paragraph):
+    pieces = _SENTENCE_END.split(paragraph)
+    # Un número suelto ("1." o "2)") va con la frase que le sigue, para que se lea
+    # en el mismo idioma que ella.
+    merged: list[str] = []
+    for piece in pieces:
+        if merged and _BARE_NUMBER.match(merged[-1].strip()):
+            merged[-1] = f"{merged[-1].strip()} {piece}"
+        else:
+            merged.append(piece)
+    for sentence in merged:
         sentence = sentence.strip()
         while len(sentence) > MAX_CHUNK:
             cut = sentence.rfind(", ", 0, MAX_CHUNK)

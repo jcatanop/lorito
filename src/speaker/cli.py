@@ -68,7 +68,8 @@ class App:
         self._user_stopped = False  # el usuario rechazó un permiso en este turno
         self._feedback_after_turn: str | None = None
         self._tool_timers: dict[str, threading.Timer] = {}
-        self.last_response: list[tuple[str, str | None]] = []
+        # (párrafo, idioma fijo o None, idioma del mensaje como respaldo)
+        self.last_response: list[tuple[str, str | None, str]] = []
         self.last_code: list[CodeBlock] = []
         self._turn_started = False
         self._running = True
@@ -86,10 +87,14 @@ class App:
             self._start_turn()
             print(ev.text, flush=True)
             spoken = markdown_to_speech(ev.text)
+            # Idioma del mensaje completo: respaldo para los fragmentos cortos (números de
+            # lista, títulos) que no bastan para detectar el idioma por sí solos.
+            message_lang = self.speaker.detect(" ".join(
+                p for i, p in enumerate(spoken.paragraphs) if i not in spoken.announcements))
             for i, para in enumerate(spoken.paragraphs):
                 lang = self.ui_lang if i in spoken.announcements else None
-                self.speaker.say(para, lang)
-                self.last_response.append((para, lang))
+                self.speaker.say(para, lang, message_lang)
+                self.last_response.append((para, lang, message_lang))
             if spoken.code_blocks:
                 self.last_code = spoken.code_blocks
         elif ev.kind == "tool":
@@ -324,8 +329,8 @@ class App:
             self.speaker.stop()
             if not self.last_response:
                 self.announce(msg.NOTHING_TO_REPEAT)
-            for para, lang in self.last_response:
-                self.speaker.say(para, lang)
+            for para, lang, fallback in self.last_response:
+                self.speaker.say(para, lang, fallback)
         elif key in "cC":
             self.speaker.stop()
             if not self.last_code:

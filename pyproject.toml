@@ -22,3 +22,8 @@ path = "src/speaker/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/speaker"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]

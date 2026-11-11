@@ -3,6 +3,15 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 La versión se define en un solo lugar: `src/speaker/__init__.py`.
 
+## [0.3.1] - 2026-11-11
+
+### Corregido
+- Los números de las listas numeradas se leían en inglés: ahora van unidos a su frase y se leen en el idioma del mensaje.
+- Las frases cortas (números, títulos, «Listo.») toman el idioma del mensaje completo de Claude; las descripciones de herramientas, que suelen venir en inglés, ya no cambian el idioma de referencia.
+
+### Añadido
+- Pruebas automáticas (`uv run pytest`) del procesado de texto y de la detección de idioma.
+
 ## [0.3.0] - 2026-11-11
 
 ### Añadido

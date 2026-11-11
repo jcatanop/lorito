@@ -31,6 +31,7 @@ uv run speaker claude                                  # español e inglés
 uv run speaker --idiomas es,en,fr claude --model sonnet
 uv run speaker claude --permission-mode acceptEdits    # los argumentos tras "claude" se pasan a Claude
 uv run speaker --decir "Prueba de voz"                 # probar la voz
+uv run pytest                                          # pruebas automáticas
 ```
 
 | Tecla | Acción |
