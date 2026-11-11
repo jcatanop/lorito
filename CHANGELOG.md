@@ -7,6 +7,11 @@ La versión se define en un solo lugar: `src/lorito/__init__.py`.
 
 ### Añadido
 - Tecla I para interrumpir a Claude mientras trabaja: se detiene, no se lee lo que alcanzó a escribir y queda esperando tus indicaciones. Antes, Escape solo callaba la voz y Claude seguía trabajando.
+- Los errores se explican en voz alta: los de la API (modelo inexistente, límite de uso, sesión caducada…) se anuncian como error antes de leer su explicación, y un resultado con error lee su motivo o, si no lo trae, el tipo (máximo de turnos, presupuesto, fallo de ejecución).
+- Si Claude se cierra por un error, se lee el último mensaje que escribió (sin las líneas de diagnóstico interno) o su código de salida.
+
+### Corregido
+- Al salir con Q ya no se anuncia que Claude se cerró.
 
 ## [0.5.0] - 2026-11-11
 

@@ -85,3 +85,40 @@ def test_turn_started_by_claude_counts_as_working(app):
     assert app.working
     app.on_event(Event("done"))
     assert not app.working
+
+
+def test_api_error_is_announced_and_not_repeated_at_the_end(app):
+    app.send("hola")
+    reason = "There's an issue with the selected model (x). It may not exist."
+    app.on_event(Event("text", text=reason, error=True, subtype="model_not_found"))
+    app.on_event(Event("done", error=True, text=reason, subtype="success"))
+    assert app.speaker.said[0] == msg.CLAUDE_ERROR
+    assert app.speaker.said.count(reason) == 1
+    assert app.speaker.said[-1] == msg.TURN_ERROR
+
+
+def test_error_result_reads_its_reason(app):
+    app.send("hola")
+    app.on_event(Event("done", error=True, text="Credit balance is too low", subtype="success"))
+    assert app.speaker.said[-2:] == [msg.TURN_ERROR_REASON, "Credit balance is too low"]
+
+
+def test_error_without_reason_uses_its_type(app):
+    app.send("hola")
+    app.on_event(Event("done", error=True, subtype="error_max_turns"))
+    assert app.speaker.said[-1] == msg.ERROR_SUBTYPES["error_max_turns"]
+
+
+def test_exit_with_error_reads_last_message(app):
+    app.on_event(Event("exit", error=True, subtype="1",
+                       text="cargando...\nInvalid API key · Please run /login"))
+    assert app.speaker.said[-1] == "Invalid API key · Please run /login"
+    assert not app._running
+
+
+def test_exit_skips_internal_diagnostic_lines(app):
+    app.on_event(Event("exit", error=True, subtype="1",
+                       text='Not logged in\n[claude-code:auth] {"query_source":"sdk"}'))
+    assert app.speaker.said[-1] == "Not logged in"
+    app.on_event(Event("exit", error=True, subtype="1", text='[claude-code:x] {"a":1}'))
+    assert app.speaker.said[-1] == msg.AGENT_EXITED_ERROR.format(agent="Claude", code="1")

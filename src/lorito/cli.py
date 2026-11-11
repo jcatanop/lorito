@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import select
 import shutil
 import sys
@@ -21,6 +22,9 @@ from .textproc import CodeBlock, markdown_to_speech
 from .tts import DEFAULT_VOICES, Speaker
 
 TOOL_ANNOUNCE_DELAY = 0.4  # segundos
+# Líneas de diagnóstico interno de Claude Code ("[claude-code:unrecognized_model] {...}"):
+# no explican el problema a una persona, así que no se leen como causa de un cierre.
+_DIAGNOSTIC = re.compile(r"^\[claude-code:[\w-]+\]")
 
 DIM, RESET, CYAN, BOLD = "\033[2m", "\033[0m", "\033[36m", "\033[1m"
 
@@ -79,6 +83,7 @@ class App:
         self._turn_started = False
         self.working = False  # Claude tiene un turno en curso
         self._interrupted = False  # el usuario interrumpió el turno en curso
+        self._error_explained = False  # Claude ya explicó el error de este turno
         self._running = True
 
     # ---- salida ------------------------------------------------------------
@@ -98,6 +103,11 @@ class App:
             return
         if ev.kind == "text":
             self._start_turn()
+            if ev.error:
+                # Errores de la API (modelo inexistente, límite de uso, sesión caducada...):
+                # el texto del mensaje es la explicación; se avisa antes de leerla.
+                self._error_explained = True
+                self.announce(msg.CLAUDE_ERROR)
             print(ev.text, flush=True)
             spoken = markdown_to_speech(ev.text)
             # Idioma del mensaje completo: respaldo para los fragmentos cortos (números de
@@ -136,6 +146,7 @@ class App:
             self.working = False
             self.permissions.clear()
             self.question = None
+            explained, self._error_explained = self._error_explained, False
             if self._interrupted:
                 self._interrupted = self._user_stopped = False
                 self._feedback_after_turn = None
@@ -151,9 +162,22 @@ class App:
                 return
             if ev.denied:
                 self.announce(msg.PERMISSION_DENIED.format(tools=", ".join(ev.denied)))
-            self.announce(msg.TURN_ERROR if ev.error else msg.TURN_DONE)
+            if not ev.error:
+                self.announce(msg.TURN_DONE)
+            elif ev.text and not explained:
+                self.announce(msg.TURN_ERROR_REASON, ev.text)
+            else:
+                self.announce(msg.ERROR_SUBTYPES.get(ev.subtype, msg.TURN_ERROR))
         elif ev.kind == "exit":
-            self.announce(msg.AGENT_EXITED.format(agent=self.session.name))
+            agent = self.session.name
+            if not ev.error:
+                self.announce(msg.AGENT_EXITED.format(agent=agent))
+            elif reason := next((line for line in reversed(ev.text.splitlines())
+                                 if not _DIAGNOSTIC.match(line)), None):
+                # De lo que Claude escribió al cerrarse, la última línea suele ser la causa.
+                self.announce(msg.AGENT_EXITED_REASON.format(agent=agent), reason[:300])
+            else:
+                self.announce(msg.AGENT_EXITED_ERROR.format(agent=agent, code=ev.subtype))
             self._running = False
 
     def _announce_tool(self, ev: Event) -> None:

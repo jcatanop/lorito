@@ -64,6 +64,14 @@ NO_CODE = "No hay bloques de código en la última respuesta."
 SPEED = "Velocidad {value}."
 TURN_DONE = "Listo."
 TURN_ERROR = "La tarea terminó con un error."
+TURN_ERROR_REASON = "La tarea terminó con un error:"
+CLAUDE_ERROR = "Claude informa de un error:"
+# Motivo de un resultado con error cuando Claude no da explicación.
+ERROR_SUBTYPES = {
+    "error_max_turns": "La tarea se detuvo: se alcanzó el número máximo de turnos.",
+    "error_max_budget_usd": "La tarea se detuvo: se alcanzó el presupuesto máximo.",
+    "error_during_execution": "La tarea se detuvo por un fallo durante la ejecución.",
+}
 PERMISSION_DENIED = "No se concedió permiso para usar: {tools}."
 PERMISSION_OPTIONS = ("Pulsa ese para permitir, ene para rechazar, te para permitir siempre, "
                       "de para escuchar el detalle, o espacio para responder con la voz.")
@@ -99,6 +107,8 @@ QUESTION_DECLINED = "No respondiste. Claude se detuvo; pulsa espacio para decirl
 HEARD_ANSWER = ("Entendí: {text}. No coincide con ninguna opción. Pulsa Enter para enviarlo "
                 "como tu respuesta, o Escape para cancelar.")
 AGENT_EXITED = "{agent} se cerró."
+AGENT_EXITED_ERROR = "{agent} se cerró por un error, con código {code}."
+AGENT_EXITED_REASON = "{agent} se cerró por un error. El último mensaje fue:"
 TYPE_PROMPT = "Escribe tu mensaje y pulsa Enter: "
 GOODBYE = "Hasta luego."
 LINK_TO = "enlace a {domain}"

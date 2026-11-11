@@ -12,6 +12,7 @@ import subprocess
 import sys
 import threading
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -37,6 +38,7 @@ class Event:
     suggestions: list[dict] = field(default_factory=list)
     # "done": tipo de resultado (success, error_during_execution, error_max_turns...).
     # "text": código de error de la API que acompaña al mensaje (model_not_found...).
+    # "exit": código de salida del proceso.
     subtype: str = ""
 
 
@@ -51,6 +53,8 @@ class ClaudeSession:
             text=True, bufsize=1,
         )
         self._write_lock = threading.Lock()
+        self._stderr_tail: deque[str] = deque(maxlen=20)  # para explicar un cierre con error
+        self._closing = False  # el cierre lo pidió lorito: no es un error que anunciar
         threading.Thread(target=self._read_stdout, daemon=True).start()
         threading.Thread(target=self._read_stderr, daemon=True).start()
 
@@ -94,6 +98,7 @@ class ClaudeSession:
                 pass  # Claude ya terminó; el evento "exit" lo notificará
 
     def close(self) -> None:
+        self._closing = True
         if self._proc.poll() is None:
             try:
                 self._proc.stdin.close()
@@ -107,6 +112,8 @@ class ClaudeSession:
     def _read_stderr(self) -> None:
         for line in self._proc.stderr:
             sys.stderr.write(f"[claude] {line}")
+            if line.strip():
+                self._stderr_tail.append(line.strip())
 
     def _read_stdout(self) -> None:
         for line in self._proc.stdout:
@@ -125,7 +132,11 @@ class ClaudeSession:
             for event in _parse(data):
                 self._on_event(event)
         self._proc.wait()
-        self._on_event(Event("exit", error=self._proc.returncode != 0))
+        code = self._proc.returncode
+        if self._closing:
+            return
+        self._on_event(Event("exit", error=code != 0, subtype=str(code),
+                             text="\n".join(self._stderr_tail) if code != 0 else ""))
 
 
 def _parse(data: dict) -> list[Event]:
@@ -142,7 +153,8 @@ def _parse(data: dict) -> list[Event]:
         events = []
         for block in data["message"].get("content", []):
             if block.get("type") == "text" and block.get("text", "").strip():
-                events.append(Event("text", text=block["text"]))
+                events.append(Event("text", text=block["text"], error=bool(data.get("error")),
+                                    subtype=data.get("error") or ""))
             elif block.get("type") == "tool_use":
                 events.append(Event("tool", tool=block.get("name", ""),
                                     args=block.get("input") or {}, tool_use_id=block.get("id", "")))
@@ -150,6 +162,9 @@ def _parse(data: dict) -> list[Event]:
     # Los eventos "user" son resultados de herramientas (salida de comandos): no se leen.
     if kind == "result":
         denied = sorted({d.get("tool_name", "") for d in data.get("permission_denials") or []})
-        return [Event("done", error=bool(data.get("is_error")), denied=denied,
+        is_error = bool(data.get("is_error"))
+        # En los errores, "result" trae la explicación (en los éxitos repite la respuesta).
+        reason = data.get("result") if is_error and isinstance(data.get("result"), str) else ""
+        return [Event("done", error=is_error, denied=denied, text=reason,
                       subtype=data.get("subtype") or "")]
     return []
