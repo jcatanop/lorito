@@ -9,7 +9,6 @@ La versión se define en un solo lugar: `src/lorito/__init__.py`.
 - Tecla I para interrumpir a Claude mientras trabaja: se detiene, no se lee lo que alcanzó a escribir y queda esperando tus indicaciones. Antes, Escape solo callaba la voz y Claude seguía trabajando.
 - Los errores se explican en voz alta: los de la API (modelo inexistente, límite de uso, sesión caducada…) se anuncian como error antes de leer su explicación, y un resultado con error lee su motivo o, si no lo trae, el tipo (máximo de turnos, presupuesto, fallo de ejecución).
 - Si Claude se cierra por un error, se lee el último mensaje que escribió (sin las líneas de diagnóstico interno) o su código de salida.
-
 - Aviso de espera: mientras Claude trabaja en silencio suena un tic suave cada 8 segundos y, cada 6 tics, se dice «Claude sigue trabajando». Se ajusta o desactiva con `--aviso-trabajo`.
 - Modo plan: al pedir aprobación del plan se lee el plan completo, y la tecla D lo vuelve a leer. Antes solo se oía «usar la herramienta ExitPlanMode» y se aprobaba sin escucharlo.
 
