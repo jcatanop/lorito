@@ -132,9 +132,11 @@ Cuando Claude pide permiso para usar una herramienta, lorito emite un pitido y l
 | S | Permitir |
 | N | Rechazar: Claude se detiene y espera tus indicaciones |
 | T | Permitir siempre, solo durante esta sesión (no se guarda en la configuración) |
-| D | Escuchar el detalle: el comando, la ruta o el cambio |
+| D | Escuchar el detalle: el comando, la ruta, el cambio o el plan |
 | P | Repetir la pregunta |
 | Espacio / E | Responder con la voz o escribiendo: «sí», «no», «siempre», o una indicación (rechaza y se la envía a Claude) |
+
+Si trabajas en modo plan (`lorito claude --permission-mode plan`), cuando Claude termina el plan lo lee completo antes de pedirte la aprobación: S lo aprueba y Claude empieza a trabajar; N lo rechaza y Claude espera que le digas qué cambiar; D lo lee de nuevo y R también lo repite.
 
 Cuando Claude te pregunta con opciones, lorito lee la pregunta y cada opción numerada con su descripción:
 

@@ -11,6 +11,7 @@ La versión se define en un solo lugar: `src/lorito/__init__.py`.
 - Si Claude se cierra por un error, se lee el último mensaje que escribió (sin las líneas de diagnóstico interno) o su código de salida.
 
 - Aviso de espera: mientras Claude trabaja en silencio suena un tic suave cada 8 segundos y, cada 6 tics, se dice «Claude sigue trabajando». Se ajusta o desactiva con `--aviso-trabajo`.
+- Modo plan: al pedir aprobación del plan se lee el plan completo, y la tecla D lo vuelve a leer. Antes solo se oía «usar la herramienta ExitPlanMode» y se aprobaba sin escucharlo.
 
 ### Corregido
 - Al salir con Q ya no se anuncia que Claude se cerró.

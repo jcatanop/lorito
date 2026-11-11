@@ -154,3 +154,39 @@ def test_waiting_tick_can_be_disabled():
     a.send("hola")
     a.tick(a._last_activity + 1000)
     assert a.speaker.beeps == 0
+
+
+PLAN = "# Plan: crear nota.txt\n\n## Pasos\n1. Crear `nota.txt` con el texto hola.\n"
+
+
+def plan_request():
+    return Event("permission", tool=msg.PLAN_TOOL, request_id="p1", tool_use_id="t1",
+                 args={"plan": PLAN, "planFilePath": "/tmp/plan.md"})
+
+
+def test_plan_is_read_before_approval(app):
+    app.send("Planea crear nota.txt")
+    app.on_event(plan_request())
+    said = " ".join(app.speaker.said)
+    assert "pide tu aprobación" in said
+    assert "Crear nota.txt con el texto hola." in said
+    assert app.speaker.said[-1] == msg.PLAN_OPTIONS
+    app.handle_key("s", None, None)
+    assert app.session.calls == [f"allow:{msg.PLAN_TOOL}"]
+    assert app.speaker.said[-1] == msg.PLAN_APPROVED
+
+
+def test_plan_detail_rereads_plan_and_repeat_key_has_it(app):
+    app.send("Planea crear nota.txt")
+    app.on_event(plan_request())
+    app.speaker.said.clear()
+    app.handle_key("d", None, None)
+    assert "Crear nota.txt con el texto hola." in " ".join(app.speaker.said)
+    assert any("Crear nota.txt" in para for para, _, _ in app.last_response)
+
+
+def test_rejecting_plan_stops_claude(app):
+    app.send("Planea crear nota.txt")
+    app.on_event(plan_request())
+    app.handle_key("n", None, None)
+    assert app.session.calls == [f"deny:{msg.PLAN_TOOL}"]

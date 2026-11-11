@@ -6,6 +6,7 @@ import re
 from pathlib import PurePath
 
 UI_LANG = "es"
+PLAN_TOOL = "ExitPlanMode"  # Claude sale del modo plan y pide aprobar el plan
 
 READY = "Lorito versión {version} listo. Pulsa espacio para hablar y hache para escuchar la ayuda."
 WELCOME_TITLE = "Lorito {version}"
@@ -30,7 +31,7 @@ PERMISSION_KEYS = [
     ("S", "Ese", "permitir"),
     ("N", "Ene", "rechazar; Claude se detiene y espera tus indicaciones"),
     ("T", "Te", "permitir siempre durante esta sesión"),
-    ("D", "De", "escuchar el detalle (el comando, la ruta o el cambio)"),
+    ("D", "De", "escuchar el detalle (el comando, la ruta, el cambio o el plan)"),
     ("P", "Pe", "repetir la pregunta"),
     ("Espacio / E", "Espacio o E", "responder con la voz o escribiendo: sí, no, siempre, "
                                     "o una indicación para Claude"),
@@ -75,6 +76,9 @@ ERROR_SUBTYPES = {
 PERMISSION_DENIED = "No se concedió permiso para usar: {tools}."
 PERMISSION_OPTIONS = ("Pulsa ese para permitir, ene para rechazar, te para permitir siempre, "
                       "de para escuchar el detalle, o espacio para responder con la voz.")
+PLAN_OPTIONS = ("Pulsa ese para aprobar el plan, ene para rechazarlo y decirle a Claude qué "
+                "cambiar, de para escucharlo otra vez, o espacio para responder con la voz.")
+PLAN_APPROVED = "Plan aprobado. Claude empieza a trabajar."
 PERMISSION_MORE = "Hay {n} permisos más pendientes."
 PERMISSION_ALLOWED = "Permitido."
 PERMISSION_ALWAYS = "Permitido durante esta sesión."
@@ -141,6 +145,10 @@ def permission_request(name: str, args: dict, description: str) -> tuple[str, st
             return "Claude pide permiso para consultar una página web.", None, url
         case "WebSearch":
             return "Claude pide permiso para buscar en internet:", args.get("query"), args.get("query", "")
+        case "ExitPlanMode":
+            # El detalle es el plan en markdown: se lee completo, no se resume.
+            return ("Claude terminó su plan y pide tu aprobación para ponerlo en marcha. El plan es:",
+                    None, args.get("plan") or "")
         case _:
             detail = ". ".join(f"{k}: {v}" for k, v in args.items() if isinstance(v, (str, int, float)))
             return (f"Claude pide permiso para usar la herramienta {name.replace('_', ' ')}.",
@@ -191,5 +199,7 @@ def tool_use(name: str, args: dict) -> tuple[str, str | None]:
             return "Claude te hace una pregunta.", None
         case "TodoWrite":
             return "Actualizando la lista de tareas.", None
+        case "ExitPlanMode":
+            return "Claude presenta su plan:", None
         case _:
             return f"Usando la herramienta {name.replace('_', ' ')}.", None

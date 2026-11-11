@@ -120,18 +120,7 @@ class App:
                 # el texto del mensaje es la explicación; se avisa antes de leerla.
                 self._error_explained = True
                 self.announce(msg.CLAUDE_ERROR)
-            print(ev.text, flush=True)
-            spoken = markdown_to_speech(ev.text)
-            # Idioma del mensaje completo: respaldo para los fragmentos cortos (números de
-            # lista, títulos) que no bastan para detectar el idioma por sí solos.
-            message_lang = self.speaker.detect(" ".join(
-                p for i, p in enumerate(spoken.paragraphs) if i not in spoken.announcements))
-            for i, para in enumerate(spoken.paragraphs):
-                lang = self.ui_lang if i in spoken.announcements else None
-                self.speaker.say(para, lang, message_lang)
-                self.last_response.append((para, lang, message_lang))
-            if spoken.code_blocks:
-                self.last_code = spoken.code_blocks
+            self.speak_markdown(ev.text)
         elif ev.kind == "tool":
             self._start_turn()
             # Si la herramienta necesita permiso, la petición llega justo después: se espera
@@ -192,10 +181,30 @@ class App:
                 self.announce(msg.AGENT_EXITED_ERROR.format(agent=agent, code=ev.subtype))
             self._running = False
 
+    def speak_markdown(self, text: str, remember: bool = True, show: bool = True) -> None:
+        """Muestra y lee un texto en markdown. Con `remember`, la tecla R lo repite."""
+        if show:
+            print(text, flush=True)
+        spoken = markdown_to_speech(text)
+        # Idioma del mensaje completo: respaldo para los fragmentos cortos (números de
+        # lista, títulos) que no bastan para detectar el idioma por sí solos.
+        message_lang = self.speaker.detect(" ".join(
+            p for i, p in enumerate(spoken.paragraphs) if i not in spoken.announcements))
+        for i, para in enumerate(spoken.paragraphs):
+            lang = self.ui_lang if i in spoken.announcements else None
+            self.speaker.say(para, lang, message_lang)
+            if remember:
+                self.last_response.append((para, lang, message_lang))
+        if remember and spoken.code_blocks:
+            self.last_code = spoken.code_blocks
+
     def _announce_tool(self, ev: Event) -> None:
         if self._tool_timers.pop(ev.tool_use_id, None):
             text, detail = msg.tool_use(ev.tool, ev.args)
             self.announce(text, detail)
+            if ev.tool == msg.PLAN_TOOL and ev.args.get("plan"):
+                # Sin petición de permiso (p. ej. permisos omitidos), el plan igual se lee.
+                self.speak_markdown(ev.args["plan"])
 
     def _start_turn(self) -> None:
         # Claude también puede empezar un turno por su cuenta (p. ej. al terminar una tarea
@@ -258,6 +267,9 @@ class App:
                 self.question = QuestionFlow(ev)
             self.present_question()
             return
+        if ev.tool == msg.PLAN_TOOL:
+            self.present_plan(ev)
+            return
         question, description, _ = msg.permission_request(ev.tool, ev.args, ev.text)
         print(f"{BOLD}{CYAN}? {question}{' ' + description if description else ''}{RESET}", flush=True)
         if ev.tool == "Bash" and ev.args.get("command"):
@@ -272,7 +284,25 @@ class App:
             self.speaker.say(msg.PERMISSION_MORE.format(n=len(self.permissions) - 1), self.ui_lang)
         self.speaker.say(msg.PERMISSION_OPTIONS, self.ui_lang)
 
+    def present_plan(self, ev: Event) -> None:
+        """Al salir del modo plan, Claude pide aprobarlo: se lee el plan completo."""
+        question, _, plan = msg.permission_request(ev.tool, ev.args, ev.text)
+        print(f"{BOLD}{CYAN}? {question}{RESET}", flush=True)
+        self.speaker.beep(660, 90)
+        self.speaker.say(question, self.ui_lang)
+        self.speak_markdown(plan)
+        print(f"{DIM}  [S] aprobar  [N] rechazar y pedir cambios  [D] escuchar el plan  "
+              f"[Espacio] voz{RESET}", flush=True)
+        if len(self.permissions) > 1:
+            self.speaker.say(msg.PERMISSION_MORE.format(n=len(self.permissions) - 1), self.ui_lang)
+        self.speaker.say(msg.PLAN_OPTIONS, self.ui_lang)
+
     def permission_detail(self) -> None:
+        ev = self.permissions[0] if self.permissions else None
+        if ev and ev.tool == msg.PLAN_TOOL:
+            self.speaker.stop()
+            self.speak_markdown(ev.args.get("plan") or "", remember=False, show=False)
+            return
         _, _, detail = msg.permission_request(self.permissions[0].tool, self.permissions[0].args,
                                               self.permissions[0].text)
         self.speaker.stop()
@@ -290,8 +320,11 @@ class App:
         self.speaker.stop()
         if decision in (permissions.ALLOW, permissions.ALWAYS):
             self.session.allow(ev, always=decision == permissions.ALWAYS)
-            self.announce(msg.PERMISSION_ALWAYS if decision == permissions.ALWAYS
-                          else msg.PERMISSION_ALLOWED)
+            if ev.tool == msg.PLAN_TOOL:
+                self.announce(msg.PLAN_APPROVED)
+            else:
+                self.announce(msg.PERMISSION_ALWAYS if decision == permissions.ALWAYS
+                              else msg.PERMISSION_ALLOWED)
             if self.permissions:
                 self.ask_permission()
             return
