@@ -3,6 +3,17 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 La versión se define en un solo lugar: `src/speaker/__init__.py`.
 
+## [0.3.0] - 2026-11-11
+
+### Añadido
+- Peticiones de permiso de Claude Code leídas en voz alta, con pitido de aviso, y respondidas con teclas: S permitir, N rechazar, T permitir siempre (solo durante la sesión), D escuchar el detalle (comando, ruta o cambio), P repetir la pregunta.
+- Respuesta a permisos por voz o escribiendo: «sí», «no», «siempre» (también en inglés, francés y portugués) o una indicación libre, que rechaza la acción y se envía a Claude como mensaje.
+- La bienvenida y la ayuda incluyen las teclas de permisos.
+
+### Cambiado
+- El anuncio de una herramienta espera un instante: si necesita permiso, solo se oye la pregunta y no un «Ejecutando…» que quizá se rechace.
+- Al rechazar, Claude se detiene y espera instrucciones en lugar de terminar con error.
+
 ## [0.2.0] - 2026-11-11
 
 ### Añadido

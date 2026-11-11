@@ -45,7 +45,17 @@ uv run speaker --decir "Prueba de voz"                 # probar la voz
 | H | Ayuda hablada |
 | Q | Salir |
 
+Cuando Claude pide permiso para usar una herramienta, speaker emite un pitido y lee la petición:
+
+| Tecla | Acción |
+|---|---|
+| S | Permitir |
+| N | Rechazar: Claude se detiene y espera tus indicaciones |
+| T | Permitir siempre, solo durante esta sesión (no se guarda en la configuración) |
+| D | Escuchar el detalle: el comando, la ruta o el cambio |
+| P | Repetir la pregunta |
+| Espacio / E | Responder con la voz o escribiendo: «sí», «no», «siempre», o una indicación (rechaza y se la envía a Claude) |
+
 ### Limitaciones conocidas
 
-- Claude Code en modo no interactivo no puede preguntar permisos: los usos denegados se anuncian al final del turno. Hay que conceder permisos al iniciar (`--permission-mode`, `--allowedTools`).
 - Las terminales no informan de cuándo se suelta una tecla, por eso el dictado funciona pulsando una vez para empezar y otra para terminar.

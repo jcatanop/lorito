@@ -13,10 +13,13 @@ import tty
 
 from . import __version__, full_version
 from . import messages as msg
+from . import permissions
 from .claude import ClaudeSession, Event
 from .stt import Recorder, Transcriber
 from .textproc import CodeBlock, markdown_to_speech
 from .tts import DEFAULT_VOICES, Speaker
+
+TOOL_ANNOUNCE_DELAY = 0.4  # segundos
 
 DIM, RESET, CYAN, BOLD = "\033[2m", "\033[0m", "\033[36m", "\033[1m"
 
@@ -60,6 +63,11 @@ class App:
         self.transcriber: Transcriber | None = None
         self.session: ClaudeSession | None = None
         self.pending_text: str | None = None  # dictado esperando confirmación
+        self.pending_is_feedback = False  # el dictado responde a una petición de permiso
+        self.permissions: list[Event] = []  # peticiones de permiso en espera (la primera es la actual)
+        self._user_stopped = False  # el usuario rechazó un permiso en este turno
+        self._feedback_after_turn: str | None = None
+        self._tool_timers: dict[str, threading.Timer] = {}
         self.last_response: list[tuple[str, str | None]] = []
         self.last_code: list[CodeBlock] = []
         self._turn_started = False
@@ -86,10 +94,36 @@ class App:
                 self.last_code = spoken.code_blocks
         elif ev.kind == "tool":
             self._start_turn()
-            text, detail = msg.tool_use(ev.tool, ev.args)
-            self.announce(text, detail)
+            # Si la herramienta necesita permiso, la petición llega justo después: se espera
+            # un instante para no anunciar "Ejecutando..." algo que quizá se rechace.
+            timer = threading.Timer(TOOL_ANNOUNCE_DELAY, self._announce_tool, args=(ev,))
+            self._tool_timers[ev.tool_use_id] = timer
+            timer.start()
+        elif ev.kind == "permission":
+            timer = self._tool_timers.pop(ev.tool_use_id, None)
+            if timer:
+                timer.cancel()
+            self.permissions.append(ev)
+            if len(self.permissions) == 1:
+                self.ask_permission()
+        elif ev.kind == "permission_cancel":
+            current = self.permissions[0] if self.permissions else None
+            self.permissions = [p for p in self.permissions if p.request_id != ev.request_id]
+            if current and current.request_id == ev.request_id:
+                self.announce(msg.PERMISSION_CANCELLED)
+                if self.permissions:
+                    self.ask_permission()
         elif ev.kind == "done":
             self._turn_started = False
+            self.permissions.clear()
+            if self._user_stopped:
+                self._user_stopped = False
+                feedback, self._feedback_after_turn = self._feedback_after_turn, None
+                if feedback:
+                    self.send(feedback, stop_speech=False)
+                else:
+                    self.announce(msg.TURN_STOPPED)
+                return
             if ev.denied:
                 self.announce(msg.PERMISSION_DENIED.format(tools=", ".join(ev.denied)))
             self.announce(msg.TURN_ERROR if ev.error else msg.TURN_DONE)
@@ -97,16 +131,85 @@ class App:
             self.announce(msg.AGENT_EXITED.format(agent=self.session.name))
             self._running = False
 
+    def _announce_tool(self, ev: Event) -> None:
+        if self._tool_timers.pop(ev.tool_use_id, None):
+            text, detail = msg.tool_use(ev.tool, ev.args)
+            self.announce(text, detail)
+
     def _start_turn(self) -> None:
         if not self._turn_started:
             self._turn_started = True
             self.last_response = []
             self.last_code = []
 
-    def send(self, text: str) -> None:
-        self.speaker.stop()
+    def send(self, text: str, stop_speech: bool = True) -> None:
+        if stop_speech:
+            self.speaker.stop()
         print(f"{CYAN}Tú: {text}{RESET}", flush=True)
         self.session.send(text)
+
+    # ---- permisos ----------------------------------------------------------
+    def ask_permission(self) -> None:
+        ev = self.permissions[0]
+        question, description, _ = msg.permission_request(ev.tool, ev.args, ev.text)
+        print(f"{BOLD}{CYAN}? {question}{' ' + description if description else ''}{RESET}", flush=True)
+        if ev.tool == "Bash" and ev.args.get("command"):
+            print(f"{CYAN}  $ {ev.args['command']}{RESET}", flush=True)
+        print(f"{DIM}  [S] permitir  [N] rechazar  [T] siempre  [D] detalle  [Espacio] voz{RESET}",
+              flush=True)
+        self.speaker.beep(660, 90)
+        self.speaker.say(question, self.ui_lang)
+        if description:
+            self.speaker.say(description)
+        if len(self.permissions) > 1:
+            self.speaker.say(msg.PERMISSION_MORE.format(n=len(self.permissions) - 1), self.ui_lang)
+        self.speaker.say(msg.PERMISSION_OPTIONS, self.ui_lang)
+
+    def permission_detail(self) -> None:
+        _, _, detail = msg.permission_request(self.permissions[0].tool, self.permissions[0].args,
+                                              self.permissions[0].text)
+        self.speaker.stop()
+        self.speaker.say(detail or msg.NO_PERMISSION_PENDING, self.ui_lang)
+
+    def resolve_permission(self, decision: str, feedback: str | None = None) -> None:
+        if not self.permissions:
+            # La petición ya no existe (Claude la retiró): la indicación va como mensaje normal.
+            if feedback:
+                self.send(feedback)
+            else:
+                self.announce(msg.NO_PERMISSION_PENDING)
+            return
+        ev = self.permissions.pop(0)
+        self.speaker.stop()
+        if decision in (permissions.ALLOW, permissions.ALWAYS):
+            self.session.allow(ev, always=decision == permissions.ALWAYS)
+            self.announce(msg.PERMISSION_ALWAYS if decision == permissions.ALWAYS
+                          else msg.PERMISSION_ALLOWED)
+            if self.permissions:
+                self.ask_permission()
+            return
+        # Rechazo: Claude detiene el turno. Las indicaciones del usuario se envían como un
+        # mensaje normal al terminar el turno; si fueran dentro del rechazo, Claude las
+        # trataría como texto no fiable de una herramienta.
+        self.session.deny(ev)
+        self.permissions.clear()
+        self._user_stopped = True
+        self._feedback_after_turn = feedback
+        self.announce(msg.PERMISSION_FEEDBACK if feedback else msg.PERMISSION_DENIED_BY_USER)
+
+    def answer_permission_text(self, text: str) -> None:
+        """Respuesta hablada o escrita a la petición de permiso actual."""
+        decision = permissions.classify(text)
+        if decision != permissions.FEEDBACK or self.args.sin_confirmar:
+            self.resolve_permission(decision, text if decision == permissions.FEEDBACK else None)
+            return
+        self.pending_text, self.pending_is_feedback = text, True
+        self.speaker.stop()
+        print(f"{DIM}» Entendí:{RESET} {text}", flush=True)
+        prefix, rest = msg.HEARD_FEEDBACK.split("{text}")
+        self.speaker.say(prefix.strip(" :"), self.ui_lang)
+        self.speaker.say(text)
+        self.speaker.say(rest.strip(" ."), self.ui_lang)
 
     # ---- dictado -----------------------------------------------------------
     def toggle_recording(self) -> None:
@@ -126,7 +229,7 @@ class App:
             else:
                 self.announce(msg.STT_NOT_READY)
             return
-        self.pending_text = None
+        self.pending_text, self.pending_is_feedback = None, False
         self.speaker.pause()
         self.speaker.beep(880)
         print(f"{DIM}» {msg.LISTENING} (espacio para terminar){RESET}", flush=True)
@@ -137,6 +240,10 @@ class App:
         if not text:
             self.speaker.resume()
             self.announce(msg.NOTHING_HEARD)
+            return
+        if self.permissions:
+            self.speaker.resume()
+            self.answer_permission_text(text)
             return
         if self.args.sin_confirmar:
             self.speaker.resume()
@@ -162,19 +269,40 @@ class App:
             text = ""
         finally:
             tty.setcbreak(fd)
-        if text:
-            self.send(text)
-        else:
+        if not text:
             self.announce(msg.CANCELLED)
+        elif self.permissions:
+            self.answer_permission_text(text)
+        else:
+            self.send(text)
 
     # ---- teclado -----------------------------------------------------------
     def handle_key(self, key: str, fd: int, old_attrs) -> None:
-        if key == " ":
+        lower = key.lower()
+        if lower in "sntdp" and key.strip():
+            if not self.permissions:
+                self.announce(msg.NO_PERMISSION_PENDING)
+            elif lower == "s":
+                self.resolve_permission(permissions.ALLOW)
+            elif lower == "t":
+                self.resolve_permission(permissions.ALWAYS)
+            elif lower == "n":
+                self.resolve_permission(permissions.DENY)
+            elif lower == "d":
+                self.permission_detail()
+            else:
+                self.speaker.stop()
+                self.ask_permission()
+        elif key == " ":
             self.toggle_recording()
         elif key in ("\n", "\r"):
             if self.pending_text:
                 text, self.pending_text = self.pending_text, None
-                self.send(text)
+                if self.pending_is_feedback:
+                    self.pending_is_feedback = False
+                    self.resolve_permission(permissions.FEEDBACK, text)
+                else:
+                    self.send(text)
             else:
                 self.announce(msg.NOTHING_TO_SEND)
         elif key == "\x1b":
@@ -184,7 +312,7 @@ class App:
                 self.speaker.resume()
                 self.announce(msg.CANCELLED)
             elif self.pending_text:
-                self.pending_text = None
+                self.pending_text, self.pending_is_feedback = None, False
                 self.speaker.stop()
                 self.announce(msg.CANCELLED)
             else:
@@ -258,11 +386,12 @@ class App:
 
 
 def print_keys() -> None:
-    width = max(len(k) for k, _, _ in msg.KEYS)
-    print(f"{BOLD}{msg.KEYS_TITLE}{RESET}")
-    for key, _, action in msg.KEYS:
-        print(f"  {CYAN}{key.ljust(width)}{RESET}  {action[0].upper()}{action[1:]}")
-    print(flush=True)
+    width = max(len(k) for k, _, _ in msg.KEYS + msg.PERMISSION_KEYS)
+    for title, keys in ((msg.KEYS_TITLE, msg.KEYS), (msg.PERMISSION_KEYS_TITLE, msg.PERMISSION_KEYS)):
+        print(f"{BOLD}{title}{RESET}")
+        for key, _, action in keys:
+            print(f"  {CYAN}{key.ljust(width)}{RESET}  {action[0].upper()}{action[1:]}")
+        print(flush=True)
 
 
 def print_welcome(agent: str) -> None:
