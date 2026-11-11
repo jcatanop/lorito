@@ -3,6 +3,17 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 La versión se define en un solo lugar: `src/speaker/__init__.py`.
 
+## [0.4.0] - 2026-11-11
+
+### Añadido
+- Preguntas con opciones de Claude (AskUserQuestion): se leen la pregunta, cada opción numerada y su descripción, con un pitido de aviso. Si hay varias preguntas, se responden una tras otra.
+- Respuesta con la tecla del número. En preguntas de varias respuestas, los números marcan o desmarcan y Enter confirma.
+- Respuesta por voz o escrita con el número («la dos», «opción 3»), el nombre de la opción («SQLite») o tus propias palabras como respuesta libre.
+- La tecla N deja la pregunta sin responder y Claude se detiene a esperar indicaciones.
+
+### Cambiado
+- Lo escrito con la tecla E ya no pide confirmación con Enter al responder permisos o preguntas; la confirmación queda para el dictado por voz.
+
 ## [0.3.1] - 2026-11-11
 
 ### Corregido

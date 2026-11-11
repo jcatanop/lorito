@@ -54,10 +54,11 @@ class ClaudeSession:
         self._write({"type": "user", "message": {"role": "user",
                                                  "content": [{"type": "text", "text": text}]}})
 
-    def allow(self, ev: Event, always: bool = False) -> None:
+    def allow(self, ev: Event, always: bool = False, updated_input: dict | None = None) -> None:
         """Permite el uso de la herramienta. Con `always`, aplica las reglas que sugiere
-        Claude, pero solo durante esta sesión (nunca se guardan en archivos de configuración)."""
-        response = {"behavior": "allow", "updatedInput": ev.args}
+        Claude, pero solo durante esta sesión (nunca se guardan en archivos de configuración).
+        `updated_input` reemplaza los argumentos (p. ej. para añadir respuestas a preguntas)."""
+        response = {"behavior": "allow", "updatedInput": updated_input or ev.args}
         if always:
             rules = [dict(s, destination="session") for s in ev.suggestions
                      if s.get("type") in ("addRules", "addDirectories")]

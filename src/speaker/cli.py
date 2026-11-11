@@ -14,6 +14,7 @@ import tty
 from . import __version__, full_version
 from . import messages as msg
 from . import permissions
+from .questions import TOOL_NAME as ASK_TOOL, QuestionFlow, match_options
 from .claude import ClaudeSession, Event
 from .stt import Recorder, Transcriber
 from .textproc import CodeBlock, markdown_to_speech
@@ -62,9 +63,13 @@ class App:
         self.recorder = Recorder()
         self.transcriber: Transcriber | None = None
         self.session: ClaudeSession | None = None
-        self.pending_text: str | None = None  # dictado esperando confirmación
-        self.pending_is_feedback = False  # el dictado responde a una petición de permiso
-        self.permissions: list[Event] = []  # peticiones de permiso en espera (la primera es la actual)
+        self.pending_text: str | None = None  # dictado esperando confirmación con Enter
+        # Qué es el texto pendiente: "message" (mensaje normal), "feedback" (indicación al
+        # rechazar un permiso) o "answer" (respuesta libre a una pregunta con opciones).
+        self.pending_kind = "message"
+        self.question: QuestionFlow | None = None  # pregunta con opciones en curso
+        # Peticiones de permiso y preguntas en espera; la primera es la actual.
+        self.permissions: list[Event] = []
         self._user_stopped = False  # el usuario rechazó un permiso en este turno
         self._feedback_after_turn: str | None = None
         self._tool_timers: dict[str, threading.Timer] = {}
@@ -121,6 +126,7 @@ class App:
         elif ev.kind == "done":
             self._turn_started = False
             self.permissions.clear()
+            self.question = None
             if self._user_stopped:
                 self._user_stopped = False
                 feedback, self._feedback_after_turn = self._feedback_after_turn, None
@@ -156,6 +162,11 @@ class App:
     # ---- permisos ----------------------------------------------------------
     def ask_permission(self) -> None:
         ev = self.permissions[0]
+        if ev.tool == ASK_TOOL:
+            if self.question is None or self.question.request is not ev:
+                self.question = QuestionFlow(ev)
+            self.present_question()
+            return
         question, description, _ = msg.permission_request(ev.tool, ev.args, ev.text)
         print(f"{BOLD}{CYAN}? {question}{' ' + description if description else ''}{RESET}", flush=True)
         if ev.tool == "Bash" and ev.args.get("command"):
@@ -198,23 +209,137 @@ class App:
         # trataría como texto no fiable de una herramienta.
         self.session.deny(ev)
         self.permissions.clear()
+        was_question, self.question = self.question is not None, None
         self._user_stopped = True
         self._feedback_after_turn = feedback
-        self.announce(msg.PERMISSION_FEEDBACK if feedback else msg.PERMISSION_DENIED_BY_USER)
+        if feedback:
+            self.announce(msg.PERMISSION_FEEDBACK)
+        else:
+            self.announce(msg.QUESTION_DECLINED if was_question else msg.PERMISSION_DENIED_BY_USER)
 
-    def answer_permission_text(self, text: str) -> None:
-        """Respuesta hablada o escrita a la petición de permiso actual."""
+    def answer_permission_text(self, text: str, confirm: bool = True) -> None:
+        """Respuesta hablada o escrita a la petición de permiso actual. `confirm` pide
+        Enter antes de enviar una indicación libre (para el dictado, que puede fallar)."""
         decision = permissions.classify(text)
-        if decision != permissions.FEEDBACK or self.args.sin_confirmar:
+        if decision != permissions.FEEDBACK or not confirm:
             self.resolve_permission(decision, text if decision == permissions.FEEDBACK else None)
             return
-        self.pending_text, self.pending_is_feedback = text, True
+        self.confirm_text(text, "feedback", msg.HEARD_FEEDBACK)
+
+    def confirm_text(self, text: str, kind: str, template: str) -> None:
+        """Lee lo que se entendió y deja el texto pendiente hasta que se pulse Enter."""
+        self.pending_text, self.pending_kind = text, kind
         self.speaker.stop()
         print(f"{DIM}» Entendí:{RESET} {text}", flush=True)
-        prefix, rest = msg.HEARD_FEEDBACK.split("{text}")
+        prefix, rest = template.split("{text}")
         self.speaker.say(prefix.strip(" :"), self.ui_lang)
         self.speaker.say(text)
         self.speaker.say(rest.strip(" ."), self.ui_lang)
+
+    # ---- preguntas con opciones ---------------------------------------------
+    @property
+    def question_active(self) -> bool:
+        return bool(self.permissions) and self.permissions[0].tool == ASK_TOOL \
+            and self.question is not None
+
+    def present_question(self) -> None:
+        q = self.question
+        total = len(q.questions)
+        intro = (msg.QUESTION_INTRO if total == 1
+                 else msg.QUESTION_INTRO_N.format(i=q.index + 1, n=total))
+        text = q.current.get("question", "")
+        header = q.current.get("header")
+        print(f"{BOLD}{CYAN}? {intro}{RESET} {f'[{header}] ' if header else ''}{BOLD}{text}{RESET}",
+              flush=True)
+        self.speaker.beep(660, 90)
+        self.speaker.say(intro, self.ui_lang)
+        self.speaker.say(text)
+        for n, option in enumerate(q.current.get("options") or [], start=1):
+            label, description = option.get("label", ""), option.get("description", "")
+            mark = "[x] " if n - 1 in q.selected else ("[ ] " if q.multi else "")
+            print(f"  {CYAN}{n}.{RESET} {mark}{label}{DIM}{' — ' + description if description else ''}{RESET}",
+                  flush=True)
+            self.speaker.say(msg.OPTION.format(n=n, label=label), self.ui_lang)
+            if description:
+                self.speaker.say(description)
+        hint = "[1-9] marcar  [Enter] confirmar" if q.multi else "[1-9] elegir"
+        print(f"{DIM}  {hint}  [Espacio/E] voz o texto  [P] repetir  [N] no responder{RESET}",
+              flush=True)
+        self.speaker.say(msg.QUESTION_HELP_MULTI if q.multi else msg.QUESTION_HELP_SINGLE,
+                         self.ui_lang)
+
+    def choose_options(self, indices: list[int]) -> None:
+        """Responde la pregunta actual con esas opciones y pasa a la siguiente."""
+        q = self.question
+        labels = ", ".join(q.labels[i] for i in sorted(indices))
+        self.speaker.stop()
+        self.announce(msg.OPTION_CHOSEN.format(labels=labels))
+        self._advance(q.answer_options(indices))
+
+    def answer_question_free(self, text: str) -> None:
+        self.speaker.stop()
+        self.announce(msg.OPTION_CHOSEN.format(labels=text))
+        self._advance(self.question.answer(text))
+
+    def _advance(self, finished: bool) -> None:
+        if not finished:
+            self.present_question()
+            return
+        q, self.question = self.question, None
+        ev = self.permissions.pop(0)
+        self.session.allow(ev, updated_input=q.updated_input())
+        self.announce(msg.ANSWERS_SENT)
+        if self.permissions:
+            self.ask_permission()
+
+    def answer_question_text(self, text: str, confirm: bool = True) -> None:
+        """Respuesta hablada o escrita: número, nombre de opción o texto libre."""
+        q = self.question
+        found = match_options(text, q.labels)
+        if found and (q.multi or len(found) == 1):
+            self.choose_options(found)
+        elif not confirm:
+            self.answer_question_free(text)
+        else:
+            self.confirm_text(text, "answer", msg.HEARD_ANSWER)
+
+    def handle_question_key(self, key: str) -> bool:
+        """Teclas de la pregunta en curso. Devuelve False si la tecla no es suya."""
+        q = self.question
+        lower = key.lower()
+        if key.isdigit() and key != "0":
+            n = int(key)
+            if n > len(q.labels):
+                self.speaker.stop()
+                self.announce(msg.NO_SUCH_OPTION.format(n=n))
+            elif q.multi:
+                marked = q.toggle(n - 1)
+                self.speaker.stop()
+                label = q.labels[n - 1]
+                self.announce((msg.OPTION_MARKED if marked else msg.OPTION_UNMARKED).format(label=label))
+            else:
+                self.choose_options([n - 1])
+            return True
+        if key in ("\n", "\r") and not self.pending_text:
+            if not q.multi:
+                self.announce(msg.QUESTION_HOW)
+            elif not q.selected:
+                self.announce(msg.NONE_MARKED)
+            else:
+                self.choose_options(list(q.selected))
+            return True
+        if lower == "n":
+            self.resolve_permission(permissions.DENY)
+            return True
+        if lower == "p":
+            self.speaker.stop()
+            self.present_question()
+            return True
+        if lower in "std":
+            self.speaker.stop()
+            self.announce(msg.QUESTION_HOW)
+            return True
+        return False
 
     # ---- dictado -----------------------------------------------------------
     def toggle_recording(self) -> None:
@@ -234,7 +359,7 @@ class App:
             else:
                 self.announce(msg.STT_NOT_READY)
             return
-        self.pending_text, self.pending_is_feedback = None, False
+        self.pending_text, self.pending_kind = None, "message"
         self.speaker.pause()
         self.speaker.beep(880)
         print(f"{DIM}» {msg.LISTENING} (espacio para terminar){RESET}", flush=True)
@@ -246,23 +371,20 @@ class App:
             self.speaker.resume()
             self.announce(msg.NOTHING_HEARD)
             return
-        if self.permissions:
-            self.speaker.resume()
-            self.answer_permission_text(text)
-            return
-        if self.args.sin_confirmar:
-            self.speaker.resume()
-            self.send(text)
-            return
-        self.pending_text = text
-        # Lo pendiente de la respuesta anterior se descarta para leer la confirmación ya.
-        self.speaker.stop()
         self.speaker.resume()
-        print(f"{DIM}» Entendí:{RESET} {text}", flush=True)
-        prefix, rest = msg.HEARD.split("{text}")
-        self.speaker.say(prefix.strip(" :"), self.ui_lang)
-        self.speaker.say(text)
-        self.speaker.say(rest.strip(" ."), self.ui_lang)
+        self.handle_text(text, confirm=not self.args.sin_confirmar)
+
+    def handle_text(self, text: str, confirm: bool) -> None:
+        """Texto dictado o escrito: responde a la pregunta o permiso en curso, o es un mensaje."""
+        if self.question_active:
+            self.answer_question_text(text, confirm)
+        elif self.permissions:
+            self.answer_permission_text(text, confirm)
+        elif confirm:
+            # Lo pendiente de la respuesta anterior se descarta para leer la confirmación ya.
+            self.confirm_text(text, "message", msg.HEARD)
+        else:
+            self.send(text)
 
     def type_message(self, fd: int, old_attrs) -> None:
         self.speaker.stop()
@@ -276,14 +398,14 @@ class App:
             tty.setcbreak(fd)
         if not text:
             self.announce(msg.CANCELLED)
-        elif self.permissions:
-            self.answer_permission_text(text)
         else:
-            self.send(text)
+            self.handle_text(text, confirm=False)
 
     # ---- teclado -----------------------------------------------------------
     def handle_key(self, key: str, fd: int, old_attrs) -> None:
         lower = key.lower()
+        if self.question_active and self.handle_question_key(key):
+            return
         if lower in "sntdp" and key.strip():
             if not self.permissions:
                 self.announce(msg.NO_PERMISSION_PENDING)
@@ -302,10 +424,12 @@ class App:
             self.toggle_recording()
         elif key in ("\n", "\r"):
             if self.pending_text:
-                text, self.pending_text = self.pending_text, None
-                if self.pending_is_feedback:
-                    self.pending_is_feedback = False
+                text, kind = self.pending_text, self.pending_kind
+                self.pending_text, self.pending_kind = None, "message"
+                if kind == "feedback":
                     self.resolve_permission(permissions.FEEDBACK, text)
+                elif kind == "answer" and self.question_active:
+                    self.answer_question_free(text)
                 else:
                     self.send(text)
             else:
@@ -317,7 +441,7 @@ class App:
                 self.speaker.resume()
                 self.announce(msg.CANCELLED)
             elif self.pending_text:
-                self.pending_text, self.pending_is_feedback = None, False
+                self.pending_text, self.pending_kind = None, "message"
                 self.speaker.stop()
                 self.announce(msg.CANCELLED)
             else:
@@ -391,8 +515,10 @@ class App:
 
 
 def print_keys() -> None:
-    width = max(len(k) for k, _, _ in msg.KEYS + msg.PERMISSION_KEYS)
-    for title, keys in ((msg.KEYS_TITLE, msg.KEYS), (msg.PERMISSION_KEYS_TITLE, msg.PERMISSION_KEYS)):
+    sections = ((msg.KEYS_TITLE, msg.KEYS), (msg.PERMISSION_KEYS_TITLE, msg.PERMISSION_KEYS),
+                (msg.QUESTION_KEYS_TITLE, msg.QUESTION_KEYS))
+    width = max(len(k) for _, keys in sections for k, _, _ in keys)
+    for title, keys in sections:
         print(f"{BOLD}{title}{RESET}")
         for key, _, action in keys:
             print(f"  {CYAN}{key.ljust(width)}{RESET}  {action[0].upper()}{action[1:]}")

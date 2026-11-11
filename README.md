@@ -57,6 +57,16 @@ Cuando Claude pide permiso para usar una herramienta, speaker emite un pitido y 
 | P | Repetir la pregunta |
 | Espacio / E | Responder con la voz o escribiendo: «sí», «no», «siempre», o una indicación (rechaza y se la envía a Claude) |
 
+Cuando Claude te pregunta con opciones, speaker lee la pregunta y cada opción numerada con su descripción:
+
+| Tecla | Acción |
+|---|---|
+| 1 a 9 | Elegir esa opción; si la pregunta admite varias respuestas, marcarla o desmarcarla |
+| Enter | Confirmar las opciones marcadas |
+| Espacio / E | Responder con la voz o escribiendo: el número («la dos»), el nombre de la opción o tus propias palabras |
+| P | Repetir la pregunta |
+| N | No responder: Claude se detiene y espera tus indicaciones |
+
 ### Limitaciones conocidas
 
 - Las terminales no informan de cuándo se suelta una tecla, por eso el dictado funciona pulsando una vez para empezar y otra para terminar.

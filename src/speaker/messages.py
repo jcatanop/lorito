@@ -34,9 +34,20 @@ PERMISSION_KEYS = [
     ("Espacio / E", "Espacio o E", "responder con la voz o escribiendo: sí, no, siempre, "
                                     "o una indicación para Claude"),
 ]
+QUESTION_KEYS_TITLE = "Cuando Claude te pregunta con opciones"
+QUESTION_KEYS = [
+    ("1 a 9", "Los números", "elegir esa opción; si admite varias, marcarla o desmarcarla"),
+    ("Enter", "Enter", "confirmar las opciones marcadas"),
+    ("Espacio / E", "Espacio o E", "responder con la voz o escribiendo: el número, el nombre "
+                                    "de la opción o tus propias palabras"),
+    ("P", "Pe", "repetir la pregunta"),
+    ("N", "Ene", "no responder; Claude se detiene y espera tus indicaciones"),
+]
 HELP = ("Teclas disponibles. " + " ".join(f"{spoken}: {action}." for _, spoken, action in KEYS)
         + " Cuando Claude pide permiso: "
-        + " ".join(f"{spoken}: {action}." for _, spoken, action in PERMISSION_KEYS))
+        + " ".join(f"{spoken}: {action}." for _, spoken, action in PERMISSION_KEYS)
+        + " Cuando Claude te pregunta con opciones: "
+        + " ".join(f"{spoken}: {action}." for _, spoken, action in QUESTION_KEYS))
 LOADING_VOICES = "Preparando voces"
 LOADING_STT = "Cargando el modelo de reconocimiento de voz"
 STT_NOT_READY = "El reconocimiento de voz todavía se está cargando. Espera un momento."
@@ -65,6 +76,24 @@ NO_PERMISSION_PENDING = "No hay ninguna petición de permiso pendiente."
 HEARD_FEEDBACK = ("Entendí: {text}. Pulsa Enter para rechazar el permiso y enviar esta "
                   "indicación, o Escape para cancelar.")
 TURN_STOPPED = "Claude está esperando tus indicaciones."
+QUESTION_INTRO = "Claude te pregunta:"
+QUESTION_INTRO_N = "Claude te pregunta, pregunta {i} de {n}:"
+OPTION = "Opción {n}: {label}."
+QUESTION_HELP_SINGLE = ("Pulsa el número de la opción, o espacio para responder con la voz, "
+                        "diciendo el número, el nombre de la opción o tus propias palabras.")
+QUESTION_HELP_MULTI = ("Puedes elegir varias. Pulsa los números para marcarlas o desmarcarlas, "
+                       "y Enter para confirmar. O pulsa espacio para responder con la voz.")
+QUESTION_HOW = "Responde con el número de la opción, o pulsa pe para repetir la pregunta."
+OPTION_CHOSEN = "Elegiste: {labels}."
+OPTION_MARKED = "{label}, marcada."
+OPTION_UNMARKED = "{label}, desmarcada."
+OPTIONS_MARKED = "Marcadas: {labels}. Pulsa Enter para confirmar."
+NONE_MARKED = "No marcaste ninguna opción. Pulsa los números para marcarlas."
+NO_SUCH_OPTION = "No hay opción {n}."
+ANSWERS_SENT = "Respuestas enviadas a Claude."
+QUESTION_DECLINED = "No respondiste. Claude se detuvo; pulsa espacio para decirle qué hacer."
+HEARD_ANSWER = ("Entendí: {text}. No coincide con ninguna opción. Pulsa Enter para enviarlo "
+                "como tu respuesta, o Escape para cancelar.")
 AGENT_EXITED = "{agent} se cerró."
 TYPE_PROMPT = "Escribe tu mensaje y pulsa Enter: "
 GOODBYE = "Hasta luego."
@@ -143,6 +172,8 @@ def tool_use(name: str, args: dict) -> tuple[str, str | None]:
             return "Buscando en internet:", args.get("query")
         case "Task" | "Agent":
             return "Lanzando un subagente:", args.get("description")
+        case "AskUserQuestion":
+            return "Claude te hace una pregunta.", None
         case "TodoWrite":
             return "Actualizando la lista de tareas.", None
         case _:
