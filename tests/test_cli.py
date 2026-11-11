@@ -298,3 +298,30 @@ def test_feedback_after_rejection_carries_attachment(app):
     app.resolve_permission("feedback", "usa este registro")
     app.on_event(Event("done"))
     assert app.session.sent[-1] == "usa este registro\n\n```\nlog de error\n```"
+
+
+def test_claude_events_wait_while_a_key_is_being_handled(app):
+    import threading
+    app.send("hola")
+    app._lock.acquire()  # como el bucle del teclado mientras atiende una tecla
+    t = threading.Thread(target=app.on_event,
+                         args=(Event("permission", tool="Bash", request_id="r1"),))
+    t.start()
+    t.join(0.2)
+    assert t.is_alive() and app.permissions == []  # espera su turno
+    app._lock.release()
+    t.join(1)
+    assert [p.request_id for p in app.permissions] == ["r1"]
+
+
+def test_transcription_result_waits_for_the_lock(app):
+    import threading
+    app.transcriber = type("T", (), {"transcribe": lambda self, audio: "hola"})()
+    app._lock.acquire()
+    t = threading.Thread(target=app._transcribe, args=(None,))
+    t.start()
+    t.join(0.2)
+    assert t.is_alive() and app.pending_text is None
+    app._lock.release()
+    t.join(1)
+    assert app.pending_text == "hola"

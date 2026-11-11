@@ -88,7 +88,12 @@ class App:
         # rechazar un permiso) o "answer" (respuesta libre a una pregunta con opciones).
         self.pending_kind = "message"
         self.editor: LineEditor | None = None  # mensaje que se está escribiendo con la tecla E
-        self._screen = threading.RLock()  # la pantalla la usan varios hilos
+        # Candado único del estado (permisos, pregunta, turno, adjuntos...) y de la pantalla.
+        # Lo toman todos los puntos de entrada: los mensajes de Claude (hilo lector), los
+        # anuncios diferidos (temporizadores), el dictado (hilo de transcripción) y el
+        # teclado. Sin él, una tecla pulsada justo cuando llega otra petición podría
+        # aprobar la petición equivocada.
+        self._lock = threading.RLock()
         self._above = False  # ya se está escribiendo por encima del editor
         self.attachments: list[str] = []  # textos pegados o del portapapeles para el próximo mensaje
         self.question: QuestionFlow | None = None  # pregunta con opciones en curso
@@ -118,7 +123,7 @@ class App:
     def _above_editor(self):
         """Mientras se escribe con E, lo que se muestre (respuestas de Claude, anuncios)
         aparece encima y la línea del editor se vuelve a dibujar debajo."""
-        with self._screen:
+        with self._lock:
             if self.editor is None or self._above:
                 yield
                 return
@@ -585,7 +590,11 @@ class App:
         self.recorder.start()
 
     def _transcribe(self, audio) -> None:
-        text = self.transcriber.transcribe(audio)
+        text = self.transcriber.transcribe(audio)  # lento: fuera del candado
+        with self._lock:
+            self._handle_transcription(text)
+
+    def _handle_transcription(self, text: str) -> None:
         if not text:
             self.speaker.resume()
             self.announce(msg.NOTHING_HEARD)
@@ -611,12 +620,12 @@ class App:
     def start_typing(self) -> None:
         self.speaker.stop()
         self.speaker.say(msg.TYPE_PROMPT, self.ui_lang)
-        with self._screen:
+        with self._lock:
             self.editor = LineEditor()
             self._draw_editor()
 
     def handle_typing_key(self, key: str) -> None:
-        with self._screen:
+        with self._lock:
             action = self.editor.handle(key)
             if action is None:
                 self._draw_editor()
@@ -638,7 +647,7 @@ class App:
             with self._above_editor():
                 self.attach(text, msg.PASTED)
         else:
-            with self._screen:
+            with self._lock:
                 self.editor.insert(text.strip("\n"))
                 self._draw_editor()
 
@@ -755,15 +764,17 @@ class App:
                 # Con algo a medias (un Escape suelto, un pegado) se espera muy poco: si no
                 # llega nada más, se resuelve (Escape solo es la tecla Escape).
                 ready, _, _ = select.select([fd], [], [], 0.05 if parser.pending else 0.2)
-                self.tick(time.monotonic())
+                with self._lock:
+                    self.tick(time.monotonic())
                 events = parser.feed(decoder.decode(os.read(fd, 4096))) if ready else parser.flush()
                 for kind, value in events:
                     if not self._running:
                         break
-                    if kind == "paste":
-                        self.handle_paste(value)
-                    else:
-                        self.handle_key(value)
+                    with self._lock:
+                        if kind == "paste":
+                            self.handle_paste(value)
+                        else:
+                            self.handle_key(value)
         except KeyboardInterrupt:
             pass
         finally:

@@ -3,6 +3,11 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 La versión se define en un solo lugar: `src/lorito/__init__.py`.
 
+## [0.9.0] - 2026-11-11
+
+### Corregido
+- Concurrencia: los mensajes de Claude, los anuncios diferidos, el dictado y el teclado ya no modifican el estado a la vez. Antes, una tecla pulsada justo cuando llegaba otra petición podía aprobar la petición equivocada o provocar un fallo.
+
 ## [0.8.0] - 2026-11-11
 
 ### Añadido
