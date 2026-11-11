@@ -17,6 +17,7 @@ KEYS = [
     ("Espacio", "Espacio", "empezar o terminar de hablar"),
     ("Enter", "Enter", "enviar lo que dictaste"),
     ("Esc", "Escape", "callar la lectura o cancelar el dictado"),
+    ("I", "I", "interrumpir a Claude mientras trabaja"),
     ("E", "E", "escribir un mensaje con el teclado"),
     ("R", "Erre", "repetir la última respuesta"),
     ("C", "Ce", "leer el último bloque de código"),
@@ -75,6 +76,9 @@ PERMISSION_CANCELLED = "Claude retiró la petición de permiso."
 NO_PERMISSION_PENDING = "No hay ninguna petición de permiso pendiente."
 HEARD_FEEDBACK = ("Entendí: {text}. Pulsa Enter para rechazar el permiso y enviar esta "
                   "indicación, o Escape para cancelar.")
+INTERRUPTING = "Deteniendo a Claude."
+INTERRUPTED = "Claude se detuvo. Pulsa espacio para decirle qué hacer."
+NOT_WORKING = "Claude no está trabajando ahora."
 TURN_STOPPED = "Claude está esperando tus indicaciones."
 QUESTION_INTRO = "Claude te pregunta:"
 QUESTION_INTRO_N = "Claude te pregunta, pregunta {i} de {n}:"

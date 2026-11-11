@@ -117,6 +117,7 @@ uv run pytest            # pruebas automáticas
 | Espacio | Empezar / terminar de hablar |
 | Enter | Enviar lo dictado (tras escuchar la confirmación) |
 | Escape | Callar la lectura o cancelar el dictado |
+| I | Interrumpir a Claude mientras trabaja: se detiene y espera tus indicaciones |
 | E | Escribir un mensaje con el teclado |
 | R | Repetir la última respuesta |
 | C | Leer el último bloque de código |

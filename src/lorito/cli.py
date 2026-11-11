@@ -77,6 +77,8 @@ class App:
         self.last_response: list[tuple[str, str | None, str]] = []
         self.last_code: list[CodeBlock] = []
         self._turn_started = False
+        self.working = False  # Claude tiene un turno en curso
+        self._interrupted = False  # el usuario interrumpió el turno en curso
         self._running = True
 
     # ---- salida ------------------------------------------------------------
@@ -88,6 +90,12 @@ class App:
             self.speaker.say(detail)
 
     def on_event(self, ev: Event) -> None:
+        if self._interrupted and ev.kind in ("text", "tool", "permission"):
+            # Lo que Claude alcanzó a producir antes de detenerse no se lee, y un permiso
+            # que llegue tarde se rechaza para que Claude no se quede esperando respuesta.
+            if ev.kind == "permission":
+                self.session.deny(ev)
+            return
         if ev.kind == "text":
             self._start_turn()
             print(ev.text, flush=True)
@@ -125,8 +133,14 @@ class App:
                     self.ask_permission()
         elif ev.kind == "done":
             self._turn_started = False
+            self.working = False
             self.permissions.clear()
             self.question = None
+            if self._interrupted:
+                self._interrupted = self._user_stopped = False
+                self._feedback_after_turn = None
+                self.announce(msg.INTERRUPTED)
+                return
             if self._user_stopped:
                 self._user_stopped = False
                 feedback, self._feedback_after_turn = self._feedback_after_turn, None
@@ -148,6 +162,9 @@ class App:
             self.announce(text, detail)
 
     def _start_turn(self) -> None:
+        # Claude también puede empezar un turno por su cuenta (p. ej. al terminar una tarea
+        # en segundo plano), así que el turno se marca en curso con su primer evento.
+        self.working = True
         if not self._turn_started:
             self._turn_started = True
             self.last_response = []
@@ -157,7 +174,26 @@ class App:
         if stop_speech:
             self.speaker.stop()
         print(f"{CYAN}Tú: {text}{RESET}", flush=True)
+        self.working = True
         self.session.send(text)
+
+    def interrupt(self) -> None:
+        """Detiene a Claude a mitad de turno; queda esperando un nuevo mensaje."""
+        if not self.working or self._interrupted:
+            self.speaker.stop()
+            self.announce(msg.NOT_WORKING if not self.working else msg.INTERRUPTING)
+            return
+        self._interrupted = True
+        for timer in self._tool_timers.values():
+            timer.cancel()
+        self._tool_timers.clear()
+        self.permissions.clear()
+        self.question = None
+        if self.pending_kind != "message":
+            self.pending_text, self.pending_kind = None, "message"
+        self.session.interrupt()
+        self.speaker.stop()
+        self.announce(msg.INTERRUPTING)
 
     # ---- permisos ----------------------------------------------------------
     def ask_permission(self) -> None:
@@ -447,6 +483,8 @@ class App:
             else:
                 self.speaker.stop()
                 self.speaker.resume()
+        elif key in "iI":
+            self.interrupt()
         elif key in "eE":
             self.type_message(fd, old_attrs)
         elif key in "rR":

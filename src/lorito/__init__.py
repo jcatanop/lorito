@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 # Única fuente de la versión (pyproject.toml la lee de aquí). Ver CHANGELOG.md.
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 
 def full_version() -> str:

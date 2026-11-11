@@ -11,6 +11,7 @@ import json
 import subprocess
 import sys
 import threading
+import uuid
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -34,6 +35,9 @@ class Event:
     request_id: str = ""
     tool_use_id: str = ""
     suggestions: list[dict] = field(default_factory=list)
+    # "done": tipo de resultado (success, error_during_execution, error_max_turns...).
+    # "text": código de error de la API que acompaña al mensaje (model_not_found...).
+    subtype: str = ""
 
 
 class ClaudeSession:
@@ -70,6 +74,12 @@ class ClaudeSession:
         """Rechaza y detiene el turno; Claude espera el siguiente mensaje del usuario."""
         self._respond(ev.request_id, {"behavior": "deny", "message": DENY_MESSAGE,
                                       "interrupt": True})
+
+    def interrupt(self) -> None:
+        """Detiene el turno en curso. Claude responde con un resultado de error
+        ("error_during_execution") y queda esperando el siguiente mensaje."""
+        self._write({"type": "control_request", "request_id": f"lorito-{uuid.uuid4().hex[:12]}",
+                     "request": {"subtype": "interrupt"}})
 
     def _respond(self, request_id: str, response: dict) -> None:
         self._write({"type": "control_response", "response": {
@@ -140,5 +150,6 @@ def _parse(data: dict) -> list[Event]:
     # Los eventos "user" son resultados de herramientas (salida de comandos): no se leen.
     if kind == "result":
         denied = sorted({d.get("tool_name", "") for d in data.get("permission_denials") or []})
-        return [Event("done", error=bool(data.get("is_error")), denied=denied)]
+        return [Event("done", error=bool(data.get("is_error")), denied=denied,
+                      subtype=data.get("subtype") or "")]
     return []

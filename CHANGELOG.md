@@ -3,6 +3,11 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 La versión se define en un solo lugar: `src/lorito/__init__.py`.
 
+## [0.6.0] - 2026-11-11
+
+### Añadido
+- Tecla I para interrumpir a Claude mientras trabaja: se detiene, no se lee lo que alcanzó a escribir y queda esperando tus indicaciones. Antes, Escape solo callaba la voz y Claude seguía trabajando.
+
 ## [0.5.0] - 2026-11-11
 
 ### Cambiado
