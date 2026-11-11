@@ -10,6 +10,8 @@ La versión se define en un solo lugar: `src/lorito/__init__.py`.
 - Los errores se explican en voz alta: los de la API (modelo inexistente, límite de uso, sesión caducada…) se anuncian como error antes de leer su explicación, y un resultado con error lee su motivo o, si no lo trae, el tipo (máximo de turnos, presupuesto, fallo de ejecución).
 - Si Claude se cierra por un error, se lee el último mensaje que escribió (sin las líneas de diagnóstico interno) o su código de salida.
 
+- Aviso de espera: mientras Claude trabaja en silencio suena un tic suave cada 8 segundos y, cada 6 tics, se dice «Claude sigue trabajando». Se ajusta o desactiva con `--aviso-trabajo`.
+
 ### Corregido
 - Al salir con Q ya no se anuncia que Claude se cerró.
 

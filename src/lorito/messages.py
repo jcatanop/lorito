@@ -87,6 +87,7 @@ HEARD_FEEDBACK = ("Entendí: {text}. Pulsa Enter para rechazar el permiso y envi
 INTERRUPTING = "Deteniendo a Claude."
 INTERRUPTED = "Claude se detuvo. Pulsa espacio para decirle qué hacer."
 NOT_WORKING = "Claude no está trabajando ahora."
+STILL_WORKING = "Claude sigue trabajando."
 TURN_STOPPED = "Claude está esperando tus indicaciones."
 QUESTION_INTRO = "Claude te pregunta:"
 QUESTION_INTRO_N = "Claude te pregunta, pregunta {i} de {n}:"

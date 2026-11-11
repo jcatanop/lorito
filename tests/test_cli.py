@@ -122,3 +122,35 @@ def test_exit_skips_internal_diagnostic_lines(app):
     assert app.speaker.said[-1] == "Not logged in"
     app.on_event(Event("exit", error=True, subtype="1", text='[claude-code:x] {"a":1}'))
     assert app.speaker.said[-1] == msg.AGENT_EXITED_ERROR.format(agent="Claude", code="1")
+
+
+def test_waiting_tick_while_claude_works_in_silence(app):
+    app.send("Revisa el proyecto")
+    start = app._last_activity
+    app.tick(start + 5)
+    assert app.speaker.beeps == 0  # aún no pasó el intervalo
+    for i in range(1, 6):
+        app.tick(start + 8 * i)
+    assert app.speaker.beeps == 5 and app.speaker.said == []
+    app.tick(start + 48)  # el sexto aviso se dice en voz alta
+    assert app.speaker.said == [msg.STILL_WORKING]
+
+
+def test_no_waiting_tick_when_idle_speaking_or_asking(app):
+    t = app._last_activity
+    app.tick(t + 100)  # Claude no trabaja
+    app.send("hola")
+    app.speaker.busy = True
+    app.tick(t + 200)  # se está leyendo algo
+    app.speaker.busy = False
+    app.permissions.append(Event("permission", tool="Bash"))
+    app.tick(t + 300)  # se espera la respuesta del usuario
+    assert app.speaker.beeps == 0
+
+
+def test_waiting_tick_can_be_disabled():
+    a = App(parse_args(["--aviso-trabajo", "0", "claude"]))
+    a.speaker, a.session = FakeSpeaker(), FakeSession()
+    a.send("hola")
+    a.tick(a._last_activity + 1000)
+    assert a.speaker.beeps == 0

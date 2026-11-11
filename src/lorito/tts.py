@@ -161,12 +161,12 @@ class Speaker:
         self.speed = round(min(2.5, max(0.5, self.speed + delta)), 2)
         return self.speed
 
-    def beep(self, freq: float = 880, ms: int = 120) -> None:
+    def beep(self, freq: float = 880, ms: int = 120, volume: float = 0.3) -> None:
         """Pitido corto, fuera de la cola, para señales como empezar a grabar."""
         rate = 22050
         t = np.arange(int(rate * ms / 1000)) / rate
         envelope = np.minimum(1, np.minimum(t, t[::-1]) * 200)
-        wave = (0.3 * np.sin(2 * np.pi * freq * t) * envelope * 32767).astype(np.int16)
+        wave = (volume * np.sin(2 * np.pi * freq * t) * envelope * 32767).astype(np.int16)
         _play_pcm(wave.tobytes(), rate)
 
     # ---- hilos -------------------------------------------------------------

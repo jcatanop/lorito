@@ -10,6 +10,7 @@ import shutil
 import sys
 import termios
 import threading
+import time
 import tty
 
 from . import __version__, full_version
@@ -24,6 +25,9 @@ from .tts import DEFAULT_VOICES, Speaker
 TOOL_ANNOUNCE_DELAY = 0.4  # segundos
 # Líneas de diagnóstico interno de Claude Code ("[claude-code:unrecognized_model] {...}"):
 # no explican el problema a una persona, así que no se leen como causa de un cierre.
+# Cada cuántos tics de espera se dice en voz alta que Claude sigue trabajando.
+SPOKEN_EVERY = 6
+
 _DIAGNOSTIC = re.compile(r"^\[claude-code:[\w-]+\]")
 
 DIM, RESET, CYAN, BOLD = "\033[2m", "\033[0m", "\033[36m", "\033[1m"
@@ -48,6 +52,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
                    help="fija el idioma del dictado (p. ej. es); por defecto se detecta solo")
     p.add_argument("--sin-confirmar", action="store_true",
                    help="envía el dictado sin pedir confirmación")
+    p.add_argument("--aviso-trabajo", type=float, default=8, metavar="SEGUNDOS",
+                   help="mientras Claude trabaja en silencio, suena un tic suave cada tantos "
+                        "segundos, y cada %d tics se dice que sigue trabajando; 0 lo desactiva "
+                        "(por defecto 8)" % SPOKEN_EVERY)
     p.add_argument("--decir", metavar="TEXTO", help="lee un texto en voz alta y termina (prueba de voz)")
     p.add_argument("orden", nargs=argparse.REMAINDER,
                    help="programa a envolver y sus argumentos (por ahora solo: claude)")
@@ -84,6 +92,8 @@ class App:
         self.working = False  # Claude tiene un turno en curso
         self._interrupted = False  # el usuario interrumpió el turno en curso
         self._error_explained = False  # Claude ya explicó el error de este turno
+        self._last_activity = time.monotonic()  # último sonido o evento, para el aviso de espera
+        self._waiting_ticks = 0
         self._running = True
 
     # ---- salida ------------------------------------------------------------
@@ -95,6 +105,8 @@ class App:
             self.speaker.say(detail)
 
     def on_event(self, ev: Event) -> None:
+        self._last_activity = time.monotonic()
+        self._waiting_ticks = 0
         if self._interrupted and ev.kind in ("text", "tool", "permission"):
             # Lo que Claude alcanzó a producir antes de detenerse no se lee, y un permiso
             # que llegue tarde se rechaza para que Claude no se quede esperando respuesta.
@@ -199,7 +211,26 @@ class App:
             self.speaker.stop()
         print(f"{CYAN}Tú: {text}{RESET}", flush=True)
         self.working = True
+        self._last_activity = time.monotonic()
+        self._waiting_ticks = 0
         self.session.send(text)
+
+    def tick(self, now: float) -> None:
+        """Aviso de espera: mientras Claude trabaja sin que nada suene (piensa o ejecuta un
+        comando largo), un tic suave cada pocos segundos y, de vez en cuando, una frase.
+        Así se distingue «sigue trabajando» de «se quedó colgado»."""
+        interval = self.args.aviso_trabajo
+        if self.speaker.busy or self.recorder.recording or self.permissions or self.pending_text:
+            self._last_activity = now  # algo suena o se espera al usuario: no es silencio
+            return
+        if not self.working or interval <= 0 or now - self._last_activity < interval:
+            return
+        self._last_activity = now
+        self._waiting_ticks += 1
+        if self._waiting_ticks % SPOKEN_EVERY == 0:
+            self.speaker.say(msg.STILL_WORKING, self.ui_lang)
+        else:
+            self.speaker.beep(520, 60, volume=0.12)
 
     def interrupt(self) -> None:
         """Detiene a Claude a mitad de turno; queda esperando un nuevo mensaje."""
@@ -554,6 +585,7 @@ class App:
         try:
             while self._running:
                 ready, _, _ = select.select([fd], [], [], 0.2)
+                self.tick(time.monotonic())
                 if not ready:
                     continue
                 key = os.read(fd, 1).decode(errors="ignore")
