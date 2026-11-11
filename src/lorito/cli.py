@@ -13,6 +13,7 @@ import termios
 import threading
 import time
 import tty
+from contextlib import contextmanager
 
 from . import __version__, full_version
 from . import messages as msg
@@ -20,12 +21,16 @@ from . import permissions
 from .questions import TOOL_NAME as ASK_TOOL, QuestionFlow, match_options
 from .claude import ClaudeSession, Event
 from .clipboard import ClipboardError, read_clipboard
-from .keyinput import DISABLE_PASTE, ENABLE_PASTE, InputParser
+from .editor import CANCEL, SUBMIT, LineEditor
+from .keyinput import DISABLE_PASTE, ENABLE_PASTE, SPECIAL_KEYS, InputParser
 from .stt import Recorder, Transcriber
 from .textproc import CodeBlock, markdown_to_speech
 from .tts import DEFAULT_VOICES, Speaker
 
 TOOL_ANNOUNCE_DELAY = 0.4  # segundos
+# Un texto pegado mientras se escribe va dentro del mensaje si es corto y de una línea;
+# si no, se adjunta aparte (en el editor de una línea sería ilegible).
+INLINE_PASTE_MAX = 300
 # Líneas de diagnóstico interno de Claude Code ("[claude-code:unrecognized_model] {...}"):
 # no explican el problema a una persona, así que no se leen como causa de un cierre.
 # Cada cuántos tics de espera se dice en voz alta que Claude sigue trabajando.
@@ -82,7 +87,9 @@ class App:
         # Qué es el texto pendiente: "message" (mensaje normal), "feedback" (indicación al
         # rechazar un permiso) o "answer" (respuesta libre a una pregunta con opciones).
         self.pending_kind = "message"
-        self.typing: str | None = None  # mensaje que se está escribiendo con la tecla E
+        self.editor: LineEditor | None = None  # mensaje que se está escribiendo con la tecla E
+        self._screen = threading.RLock()  # la pantalla la usan varios hilos
+        self._above = False  # ya se está escribiendo por encima del editor
         self.attachments: list[str] = []  # textos pegados o del portapapeles para el próximo mensaje
         self.question: QuestionFlow | None = None  # pregunta con opciones en curso
         # Peticiones de permiso y preguntas en espera; la primera es la actual.
@@ -102,6 +109,33 @@ class App:
         self._running = True
 
     # ---- salida ------------------------------------------------------------
+    @property
+    def typing(self) -> str | None:
+        """Texto del mensaje que se está escribiendo, o None si no se está escribiendo."""
+        return self.editor.text if self.editor else None
+
+    @contextmanager
+    def _above_editor(self):
+        """Mientras se escribe con E, lo que se muestre (respuestas de Claude, anuncios)
+        aparece encima y la línea del editor se vuelve a dibujar debajo."""
+        with self._screen:
+            if self.editor is None or self._above:
+                yield
+                return
+            self._above = True
+            sys.stdout.write(self.editor.clear())
+            try:
+                yield
+            finally:
+                self._above = False
+                if self.editor is not None:
+                    self._draw_editor()
+
+    def _draw_editor(self) -> None:
+        width = shutil.get_terminal_size().columns
+        sys.stdout.write(self.editor.render(msg.TYPE_PROMPT, width))
+        sys.stdout.flush()
+
     def announce(self, text: str, detail: str | None = None) -> None:
         line = f"{text} {detail}" if detail else text
         print(f"{DIM}» {line}{RESET}", flush=True)
@@ -110,6 +144,10 @@ class App:
             self.speaker.say(detail)
 
     def on_event(self, ev: Event) -> None:
+        with self._above_editor():
+            self._on_event(ev)
+
+    def _on_event(self, ev: Event) -> None:
         self._last_activity = time.monotonic()
         self._waiting_ticks = 0
         if self._interrupted and ev.kind in ("text", "tool", "permission"):
@@ -204,6 +242,10 @@ class App:
             self.last_code = spoken.code_blocks
 
     def _announce_tool(self, ev: Event) -> None:
+        with self._above_editor():
+            self._announce_tool_now(ev)
+
+    def _announce_tool_now(self, ev: Event) -> None:
         if self._tool_timers.pop(ev.tool_use_id, None):
             text, detail = msg.tool_use(ev.tool, ev.args)
             self.announce(text, detail)
@@ -568,46 +610,45 @@ class App:
     # pegado y el resto llegaría como teclas sueltas.
     def start_typing(self) -> None:
         self.speaker.stop()
-        self.typing = ""
         self.speaker.say(msg.TYPE_PROMPT, self.ui_lang)
-        print(msg.TYPE_PROMPT, end="", flush=True)
+        with self._screen:
+            self.editor = LineEditor()
+            self._draw_editor()
 
     def handle_typing_key(self, key: str) -> None:
-        if key in ("\n", "\r"):
-            text, self.typing = self.typing.strip(), None
+        with self._screen:
+            action = self.editor.handle(key)
+            if action is None:
+                self._draw_editor()
+                return
+            text = self.editor.text.strip()
+            self.editor = None
             print(flush=True)
-            if text:
-                self.handle_text(text, confirm=False)
-            else:
-                self.announce(msg.CANCELLED)
-        elif key == "\x1b":
-            self.typing = None
-            print(flush=True)
+        if action == SUBMIT and text:
+            self.handle_text(text, confirm=False)
+        elif action == SUBMIT and self.attachments and not self.permissions:
+            self.send("")  # solo los adjuntos
+        elif action in (SUBMIT, CANCEL):
             self.announce(msg.CANCELLED)
-        elif key in ("\x7f", "\b"):
-            if self.typing:
-                self.typing = self.typing[:-1]
-                print("\b \b", end="", flush=True)
-        elif key == "\x15":  # Ctrl+U: borrar todo lo escrito
-            print("\b \b" * len(self.typing), end="", flush=True)
-            self.typing = ""
-        elif key.isprintable():
-            self.typing += key
-            print(key, end="", flush=True)
 
     def handle_paste(self, text: str) -> None:
-        if self.typing is not None:
-            # Dentro de un mensaje escrito, lo pegado se añade tal cual.
-            self.typing += text
-            print(text, end="", flush=True)
-        else:
+        if self.editor is None:
             self.attach(text, msg.PASTED)
+        elif "\n" in text.strip("\n") or len(text) > INLINE_PASTE_MAX:
+            with self._above_editor():
+                self.attach(text, msg.PASTED)
+        else:
+            with self._screen:
+                self.editor.insert(text.strip("\n"))
+                self._draw_editor()
 
     # ---- teclado -----------------------------------------------------------
     def handle_key(self, key: str) -> None:
-        if self.typing is not None:
+        if self.editor is not None:
             self.handle_typing_key(key)
             return
+        if key in SPECIAL_KEYS:
+            return  # flechas y similares solo sirven al escribir
         lower = key.lower()
         if self.question_active and self.handle_question_key(key):
             return

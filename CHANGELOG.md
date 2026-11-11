@@ -3,6 +3,15 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 La versión se define en un solo lugar: `src/lorito/__init__.py`.
 
+## [0.8.0] - 2026-11-11
+
+### Añadido
+- El editor de la tecla E permite moverse y corregir en cualquier punto: flechas, Ctrl+flechas o Alt+B/F para saltar palabras, Inicio y Fin (o Ctrl+A y Ctrl+E), Supr, Ctrl+W, Ctrl+U y Ctrl+K. El texto se redibuja bien aunque ocupe varias filas.
+- Lo que llega de Claude mientras escribes se muestra encima y la línea del mensaje se vuelve a dibujar debajo, sin mezclarse.
+
+### Cambiado
+- Al pegar mientras escribes con E, solo un texto corto de una línea se inserta en el mensaje (donde está el cursor); uno largo o de varias líneas se adjunta aparte, como al pegar fuera del editor.
+
 ## [0.7.0] - 2026-11-11
 
 ### Añadido

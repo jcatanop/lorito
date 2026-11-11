@@ -159,9 +159,24 @@ Para enviarle a Claude un texto copiado, sin tener que dictarlo:
 2. Dicta (Espacio) o escribe (E) tu mensaje, por ejemplo «Me sale este error al arrancar». La confirmación avisa de que va con el texto adjunto.
 3. Pulsa Enter: Claude recibe tu mensaje y, debajo, el texto adjunto en un bloque aparte. Con Enter sin mensaje se envía solo el adjunto.
 
-Puedes adjuntar varios textos antes de enviar. **D** los lee completos y **Escape** los quita (si algo se está leyendo, el primer Escape lo calla). Si pegas mientras escribes un mensaje con E, el texto se añade en el propio mensaje.
+Puedes adjuntar varios textos antes de enviar. **D** los lee completos y **Escape** los quita (si algo se está leyendo, el primer Escape lo calla). Si pegas mientras escribes un mensaje con E, un texto corto de una sola línea (un nombre de archivo, por ejemplo) se inserta donde está el cursor; uno largo o de varias líneas se adjunta.
 
 Lo pegado en la terminal nunca se interpreta como teclas, así que sus letras no pueden permitir un comando ni cerrar lorito.
+
+### Escribir un mensaje con la tecla E
+
+Si lo que llega de Claude aparece mientras escribes, se muestra encima y tu línea sigue debajo, sin perder nada.
+
+| Tecla | Acción |
+|---|---|
+| ← / → | Mover el cursor un carácter |
+| Ctrl+← / Ctrl+→ (o Alt+B / Alt+F) | Saltar a la palabra anterior / siguiente |
+| Inicio / Fin (o Ctrl+A / Ctrl+E) | Ir al comienzo / al final |
+| Retroceso / Supr | Borrar antes / después del cursor |
+| Ctrl+W | Borrar la palabra anterior |
+| Ctrl+U / Ctrl+K | Borrar hasta el comienzo / hasta el final |
+| Enter | Enviar |
+| Escape | Cancelar el mensaje |
 
 ### Avisos mientras Claude trabaja
 

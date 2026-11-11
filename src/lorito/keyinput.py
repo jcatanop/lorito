@@ -15,8 +15,33 @@ DISABLE_PASTE = "\033[?2004l"
 PASTE_START, PASTE_END = "\x1b[200~", "\x1b[201~"
 ESC = "\x1b"
 
-# Secuencias de teclas especiales (flechas, F1...): CSI, SS3 o Alt+tecla. Se descartan.
-_SEQUENCE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]|\x1bO.|\x1b[^\[O]", re.S)
+# Teclas especiales con nombre (llegan como ("key", nombre)); las demás se descartan.
+LEFT, RIGHT, UP, DOWN = "left", "right", "up", "down"
+HOME, END, DELETE = "home", "end", "delete"
+WORD_LEFT, WORD_RIGHT = "word_left", "word_right"
+SPECIAL_KEYS = {LEFT, RIGHT, UP, DOWN, HOME, END, DELETE, WORD_LEFT, WORD_RIGHT}
+
+# Secuencias de teclas especiales (flechas, F1...): CSI, SS3 o Alt+tecla.
+_SEQUENCE = re.compile(r"\x1b\[([0-?]*)[ -/]*([@-~])|\x1bO(.)|\x1b([^\[O])", re.S)
+_ARROWS = {"D": LEFT, "C": RIGHT, "A": UP, "B": DOWN, "H": HOME, "F": END}
+_TILDE = {"1": HOME, "7": HOME, "4": END, "8": END, "3": DELETE}
+# Con Ctrl (5) o Alt (3), las flechas laterales saltan de palabra en palabra.
+_WORD_MODIFIERS = {"3", "5"}
+
+
+def _special_key(match: re.Match) -> str | None:
+    params, final, ss3, alt = match.groups()
+    if ss3:
+        return _ARROWS.get(ss3)
+    if alt:
+        return {"b": WORD_LEFT, "f": WORD_RIGHT}.get(alt)  # Alt+B / Alt+F, como en bash
+    numbers = params.split(";")
+    if final == "~":
+        return _TILDE.get(numbers[0])
+    key = _ARROWS.get(final)
+    if key in (LEFT, RIGHT) and len(numbers) > 1 and numbers[1] in _WORD_MODIFIERS:
+        return WORD_LEFT if key == LEFT else WORD_RIGHT
+    return key
 
 
 class InputParser:
@@ -66,6 +91,8 @@ class InputParser:
             if not match:
                 break  # secuencia incompleta
             self._buf = self._buf[match.end():]
+            if key := _special_key(match):
+                events.append(("key", key))
         return events
 
     def flush(self) -> list[tuple[str, str]]:

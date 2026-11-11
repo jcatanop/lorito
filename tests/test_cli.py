@@ -203,8 +203,25 @@ def test_typed_message_with_pasted_multiline_text(app, capsys):
     app.handle_paste("Traceback:\n  línea 12\nquit()")
     type_keys(app, "x\x7f")  # una letra y su borrado
     app.handle_key("\n")
-    assert app.session.sent == ["Mira este error: Traceback:\n  línea 12\nquit()"]
+    # Lo pegado de varias líneas se adjunta aparte, no dentro de la línea del mensaje.
+    assert app.session.sent == ["Mira este error:\n\n```\nTraceback:\n  línea 12\nquit()\n```"]
     assert app.typing is None
+
+
+def test_short_paste_while_typing_goes_inline_at_cursor(app):
+    app.handle_key("e")
+    type_keys(app, "abre  y dime")
+    for _ in range(len(" y dime")):
+        app.handle_key("left")
+    app.handle_paste("config.toml")
+    app.handle_key("\n")
+    assert app.session.sent == ["abre config.toml y dime"]
+
+
+def test_arrows_outside_typing_do_nothing(app):
+    app.handle_key("left")
+    app.handle_key("delete")
+    assert app.speaker.said == [] and app.session.calls == []
 
 
 def test_letters_while_typing_are_not_commands(app):

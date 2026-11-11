@@ -30,10 +30,20 @@ def test_lone_escape_is_resolved_on_flush():
 
 
 def test_arrow_and_function_keys_are_discarded():
-    assert InputParser().feed("\x1b[A\x1bOP\x1b[2~x") == [("key", "x")]
+    assert InputParser().feed("\x1bOP\x1b[2~x") == [("key", "x")]
 
 
 def test_unfinished_paste_is_closed_on_flush():
     p = InputParser()
     assert p.feed("\x1b[200~hola") == []
     assert p.flush() == [("paste", "hola")]
+
+
+def test_editing_keys_have_names():
+    keys = InputParser().feed("\x1b[D\x1b[C\x1bOH\x1b[F\x1b[3~\x1b[1;5D\x1b[1;5C\x1bb\x1b[1~\x1b[4~")
+    assert [k for _, k in keys] == ["left", "right", "home", "end", "delete",
+                                    "word_left", "word_right", "word_left", "home", "end"]
+
+
+def test_unknown_sequences_are_still_discarded():
+    assert InputParser().feed("\x1bOP\x1b[15~\x1b[2~x") == [("key", "x")]
