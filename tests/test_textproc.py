@@ -1,4 +1,4 @@
-from speaker.textproc import markdown_to_speech, split_sentences
+from lorito.textproc import markdown_to_speech, split_sentences
 
 
 def test_numbered_list_items_keep_number_with_text():

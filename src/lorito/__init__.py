@@ -1,4 +1,4 @@
-"""Speaker: lectura en voz alta de asistentes de IA de terminal."""
+"""Lorito: lectura en voz alta de asistentes de IA de terminal."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import subprocess
 from pathlib import Path
 
 # Única fuente de la versión (pyproject.toml la lee de aquí). Ver CHANGELOG.md.
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 
 def full_version() -> str:

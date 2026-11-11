@@ -110,7 +110,7 @@ class ClaudeSession:
                 # para que Claude no se quede esperando.
                 self._write({"type": "control_response", "response": {
                     "subtype": "error", "request_id": data.get("request_id"),
-                    "error": "not supported by speaker"}})
+                    "error": "not supported by lorito"}})
                 continue
             for event in _parse(data):
                 self._on_event(event)

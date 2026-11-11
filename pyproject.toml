@@ -1,5 +1,5 @@
 [project]
-name = "speaker"
+name = "lorito"
 dynamic = ["version"]
 description = "Lee en voz alta las respuestas de asistentes de IA de terminal y permite dictarles por voz"
 readme = "README.md"
@@ -11,17 +11,17 @@ dependencies = [
 ]
 
 [project.scripts]
-speaker = "speaker.cli:main"
+lorito = "lorito.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.version]
-path = "src/speaker/__init__.py"
+path = "src/lorito/__init__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/speaker"]
+packages = ["src/lorito"]
 
 [dependency-groups]
 dev = [

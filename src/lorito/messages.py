@@ -7,8 +7,8 @@ from pathlib import PurePath
 
 UI_LANG = "es"
 
-READY = "Speaker versión {version} listo. Pulsa espacio para hablar y hache para escuchar la ayuda."
-WELCOME_TITLE = "Speaker {version}"
+READY = "Lorito versión {version} listo. Pulsa espacio para hablar y hache para escuchar la ayuda."
+WELCOME_TITLE = "Lorito {version}"
 WELCOME_SUBTITLE = "Lectura en voz alta para {agent}"
 KEYS_TITLE = "Teclas"
 

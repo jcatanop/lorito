@@ -1,6 +1,6 @@
 import pytest
 
-from speaker.tts import Speaker
+from lorito.tts import Speaker
 
 
 @pytest.fixture(scope="module")

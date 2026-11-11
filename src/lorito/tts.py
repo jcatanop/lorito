@@ -36,7 +36,12 @@ MIN_DETECT_CHARS = 25
 
 def data_dir() -> Path:
     base = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share"
-    path = Path(base) / "speaker" / "voices"
+    path = Path(base) / "lorito" / "voices"
+    # Antes de llamarse lorito, el proyecto se llamaba speaker: se reaprovechan sus voces.
+    old = Path(base) / "speaker" / "voices"
+    if not path.exists() and old.is_dir():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        old.rename(path)
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -176,7 +181,7 @@ class Speaker:
                 pcm = b"".join(c.audio_int16_bytes for c in voice.synthesize(item.text, config))
                 rate = voice.config.sample_rate
             except Exception as exc:  # una frase problemática no debe tumbar la lectura
-                print(f"\n[speaker] error de síntesis: {exc}", flush=True)
+                print(f"\n[lorito] error de síntesis: {exc}", flush=True)
                 self._done(item.gen)
                 continue
             if item.gen == self._gen:

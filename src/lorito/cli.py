@@ -1,4 +1,4 @@
-"""Punto de entrada: `speaker [opciones] claude [argumentos de claude...]`."""
+"""Punto de entrada: `lorito [opciones] claude [argumentos de claude...]`."""
 
 from __future__ import annotations
 
@@ -27,11 +27,11 @@ DIM, RESET, CYAN, BOLD = "\033[2m", "\033[0m", "\033[36m", "\033[1m"
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     p = argparse.ArgumentParser(
-        prog="speaker",
+        prog="lorito",
         description="Lee en voz alta las respuestas de un asistente de IA y permite dictarle por voz.",
-        epilog="Ejemplo: speaker --idiomas es,en claude --permission-mode acceptEdits",
+        epilog="Ejemplo: lorito --idiomas es,en claude --permission-mode acceptEdits",
     )
-    p.add_argument("-V", "--version", action="version", version=f"speaker {full_version()}")
+    p.add_argument("-V", "--version", action="version", version=f"lorito {full_version()}")
     p.add_argument("--idiomas", default="es,en",
                    help=f"idiomas a reconocer al leer, separados por comas; el primero es el "
                         f"principal (disponibles: {','.join(DEFAULT_VOICES)})")
@@ -56,7 +56,7 @@ class App:
         unknown = [l for l in languages if l not in DEFAULT_VOICES]
         voices = dict(v.split("=", 1) for v in args.voz)
         if unknown and not all(l in voices for l in unknown):
-            sys.exit(f"speaker: idioma sin voz por defecto: {', '.join(unknown)}. Usa --voz IDIOMA=VOZ")
+            sys.exit(f"lorito: idioma sin voz por defecto: {', '.join(unknown)}. Usa --voz IDIOMA=VOZ")
         self.speaker = Speaker(languages, voices, default_lang=languages[0], speed=args.velocidad)
         self.ui_lang = msg.UI_LANG if msg.UI_LANG in languages else languages[0]
         self.args = args
@@ -546,14 +546,14 @@ def main(argv: list[str] | None = None) -> int:
             threading.Event().wait(0.1)
         return 0
     if not args.orden:
-        sys.exit("speaker: indica el programa a envolver, por ejemplo: speaker claude")
+        sys.exit("lorito: indica el programa a envolver, por ejemplo: lorito claude")
     program = os.path.basename(args.orden[0])
     if program != "claude":
-        sys.exit(f"speaker: por ahora solo se admite 'claude' (recibido: {program})")
+        sys.exit(f"lorito: por ahora solo se admite 'claude' (recibido: {program})")
     if not shutil.which(args.orden[0]):
-        sys.exit(f"speaker: no se encontró el programa {args.orden[0]}")
+        sys.exit(f"lorito: no se encontró el programa {args.orden[0]}")
     if not sys.stdin.isatty():
-        sys.exit("speaker: necesita ejecutarse en una terminal interactiva")
+        sys.exit("lorito: necesita ejecutarse en una terminal interactiva")
     return app.run(args.orden)
 
 

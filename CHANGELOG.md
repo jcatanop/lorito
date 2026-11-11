@@ -1,7 +1,13 @@
 # Registro de cambios
 
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
-La versión se define en un solo lugar: `src/speaker/__init__.py`.
+La versión se define en un solo lugar: `src/lorito/__init__.py`.
+
+## [0.5.0] - 2026-11-11
+
+### Cambiado
+- El proyecto pasa a llamarse **lorito** (antes speaker), por el ave capaz de imitar el habla humana y para no confundirlo con otros proyectos. El comando ahora es `lorito`: hay que desinstalar `speaker` e instalar `lorito` (ver README).
+- Las voces se guardan en `~/.local/share/lorito/voices`; las ya descargadas en la carpeta de speaker se mueven solas la primera vez.
 
 ## [0.4.0] - 2026-11-11
 

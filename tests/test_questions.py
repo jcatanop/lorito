@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from speaker.questions import QuestionFlow, match_options
+from lorito.questions import QuestionFlow, match_options
 
 LABELS = ["PostgreSQL", "SQLite", "MySQL"]
 
