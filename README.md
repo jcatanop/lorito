@@ -19,20 +19,90 @@ Esta rama prueba un enfoque 100 % local que no necesita GPU:
 
 ### Requisitos
 
-- Linux con `aplay` y `arecord` (alsa-utils).
-- [uv](https://docs.astral.sh/uv/) y Claude Code instalado (`claude`).
-- La primera vez se descargan las voces (~60 MB por idioma, en `~/.local/share/speaker/voices`) y el modelo de Whisper (~500 MB).
+- Linux con `aplay` y `arecord`, del paquete alsa-utils:
+  ```bash
+  sudo apt install alsa-utils      # Debian / Ubuntu
+  sudo dnf install alsa-utils      # Fedora
+  sudo pacman -S alsa-utils        # Arch
+  ```
+- [uv](https://docs.astral.sh/uv/), el gestor de Python con el que se instala speaker. uv también se encarga de conseguir una versión de Python adecuada (3.11 o superior):
+  ```bash
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  ```
+- Claude Code instalado y con sesión iniciada (el comando `claude` debe funcionar).
+- La primera vez se descargan las voces (~60 MB por idioma, en `~/.local/share/speaker/voices`) y el modelo de Whisper (~500 MB, en `~/.cache/huggingface`).
 
-### Uso
+### Instalación global
+
+Speaker se instala como una herramienta de uv: queda en su propio entorno aislado y el comando `speaker` se puede usar desde cualquier carpeta.
+
+1. Clona el repositorio en una ubicación permanente (la instalación apunta a esta carpeta, así que no la borres ni la muevas):
+   ```bash
+   git clone <url-del-repositorio> ~/apps/speaker
+   ```
+2. Instálalo en modo editable:
+   ```bash
+   uv tool install --editable ~/apps/speaker
+   ```
+   En modo editable, el comando usa directamente el código de esa carpeta: si cambias de rama o haces `git pull`, la próxima ejecución ya usa la nueva versión sin reinstalar.
+3. Asegúrate de que `~/.local/bin` (donde uv deja el comando) está en el `PATH`. Si `speaker` no se encuentra, ejecuta esto y abre una terminal nueva:
+   ```bash
+   uv tool update-shell
+   ```
+4. Comprueba la instalación:
+   ```bash
+   speaker --version     # p. ej. "speaker 0.4.0 (1a9ae97)": versión y commit en uso
+   ```
+
+### Uso en tus proyectos
+
+Entra en la carpeta del proyecto y lanza speaker. Claude Code se ejecuta en esa carpeta, igual que si lo lanzaras directamente:
 
 ```bash
-uv sync
-uv run speaker claude                                  # español e inglés
-uv run speaker --idiomas es,en,fr claude --model sonnet
-uv run speaker claude --permission-mode acceptEdits    # los argumentos tras "claude" se pasan a Claude
-uv run speaker --decir "Prueba de voz"                 # probar la voz
-uv run pytest                                          # pruebas automáticas
+cd ~/proyectos/mi-proyecto
+speaker claude                                  # español e inglés
+speaker --idiomas es,en,fr claude --model sonnet
+speaker claude --permission-mode acceptEdits    # los argumentos tras "claude" se pasan a Claude
+speaker claude --continue                       # continuar la última conversación de este proyecto
+speaker --decir "Prueba de voz"                 # probar la voz
+speaker --help                                  # todas las opciones
 ```
+
+### Actualizar
+
+- **Cambios de código** (`git pull`, cambiar de rama): no hace falta nada; el modo editable los usa al momento.
+- **Cambios de dependencias** (si cambia `pyproject.toml`): reinstala para que uv las descargue:
+  ```bash
+  uv tool install --editable --reinstall ~/apps/speaker
+  ```
+
+### Instalación fija (alternativa)
+
+Si prefieres una copia que no cambie aunque modifiques el repositorio, instala sin `--editable`. En ese caso `speaker --version` muestra solo la versión, sin el commit, y para actualizar hay que repetir el comando con `--reinstall`:
+
+```bash
+uv tool install ~/apps/speaker
+```
+
+### Desinstalar
+
+```bash
+uv tool uninstall speaker
+rm -rf ~/.local/share/speaker                                  # voces descargadas (opcional)
+rm -rf ~/.cache/huggingface/hub/models--Systran--faster-whisper-*  # modelos de Whisper (opcional)
+```
+
+### Desarrollo
+
+Para trabajar en el código de speaker, desde la carpeta del repositorio:
+
+```bash
+uv sync                  # entorno de desarrollo
+uv run speaker claude    # ejecutar sin instalar
+uv run pytest            # pruebas automáticas
+```
+
+### Teclas
 
 | Tecla | Acción |
 |---|---|
