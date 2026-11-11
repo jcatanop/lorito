@@ -5,6 +5,11 @@ La versión se define en un solo lugar: `src/lorito/__init__.py`.
 
 ## [0.7.0] - 2026-11-11
 
+### Añadido
+- Textos adjuntos: la tecla V adjunta el portapapeles al próximo mensaje, y pegar en la terminal (fuera de la tecla E) también lo adjunta. Se anuncia cuántas líneas tiene y cómo empieza, sin leerlo entero. El mensaje dictado o escrito se envía con cada adjunto en un bloque aparte, y Enter sin mensaje envía solo los adjuntos.
+- D lee completos los adjuntos y Escape los quita. La confirmación del dictado avisa de que hay adjuntos, y al cancelar el dictado se conservan.
+- El portapapeles se lee con wl-paste (Wayland), xclip o xsel (X11). Si no hay ninguno, se dice qué instalar.
+
 ### Corregido
 - Pegar texto en la terminal ya no se interpreta como teclas. Antes, las letras de un texto pegado (un error largo, por ejemplo) podían permitir un comando, interrumpir a Claude o cerrar lorito. Ahora la terminal marca lo pegado (modo «bracketed paste») y lorito lo recibe como un solo bloque.
 - Los mensajes escritos con la tecla E admiten texto pegado de varias líneas; antes solo se tomaba la primera. La E usa ahora un editor propio: Retroceso borra, Ctrl+U borra todo, Enter envía y Escape cancela.

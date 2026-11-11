@@ -19,6 +19,7 @@ from . import messages as msg
 from . import permissions
 from .questions import TOOL_NAME as ASK_TOOL, QuestionFlow, match_options
 from .claude import ClaudeSession, Event
+from .clipboard import ClipboardError, read_clipboard
 from .keyinput import DISABLE_PASTE, ENABLE_PASTE, InputParser
 from .stt import Recorder, Transcriber
 from .textproc import CodeBlock, markdown_to_speech
@@ -82,6 +83,7 @@ class App:
         # rechazar un permiso) o "answer" (respuesta libre a una pregunta con opciones).
         self.pending_kind = "message"
         self.typing: str | None = None  # mensaje que se está escribiendo con la tecla E
+        self.attachments: list[str] = []  # textos pegados o del portapapeles para el próximo mensaje
         self.question: QuestionFlow | None = None  # pregunta con opciones en curso
         # Peticiones de permiso y preguntas en espera; la primera es la actual.
         self.permissions: list[Event] = []
@@ -219,13 +221,57 @@ class App:
             self.last_code = []
 
     def send(self, text: str, stop_speech: bool = True) -> None:
+        """Envía un mensaje a Claude, con los textos adjuntos que haya preparados."""
         if stop_speech:
             self.speaker.stop()
-        print(f"{CYAN}Tú: {text}{RESET}", flush=True)
+        attachments, self.attachments = self.attachments, []
+        note = f" {DIM}[+ {msg.attachments_count(len(attachments))}]{RESET}" if attachments else ""
+        print(f"{CYAN}Tú: {text}{RESET}{note}", flush=True)
         self.working = True
         self._last_activity = time.monotonic()
         self._waiting_ticks = 0
-        self.session.send(text)
+        self.session.send(compose_message(text, attachments))
+
+    # ---- textos adjuntos ---------------------------------------------------
+    def attach(self, text: str, source: str) -> None:
+        """Prepara un texto (un error, un registro...) para enviarlo con el próximo mensaje.
+        No se lee entero: se dice cuántas líneas tiene y cómo empieza."""
+        text = text.strip("\n").rstrip()
+        if not text.strip():
+            self.announce(msg.CLIPBOARD_EMPTY)
+            return
+        self.attachments.append(text)
+        lines = text.splitlines()
+        first = next(line.strip() for line in lines if line.strip())
+        for line in lines[:3]:
+            print(f"{DIM}  │ {line}{RESET}", flush=True)
+        if len(lines) > 3:
+            print(f"{DIM}  │ … ({len(lines)} líneas){RESET}", flush=True)
+        self.speaker.stop()
+        self.announce(msg.ATTACHED.format(source=source, lines=msg.lines_count(len(lines))),
+                      first[:120])
+        if len(self.attachments) > 1:
+            self.speaker.say(msg.ATTACHED_TOTAL.format(
+                count=msg.attachments_count(len(self.attachments))), self.ui_lang)
+        self.speaker.say(msg.ATTACH_HINT, self.ui_lang)
+
+    def attach_clipboard(self) -> None:
+        try:
+            text = read_clipboard()
+        except ClipboardError as exc:
+            self.speaker.stop()
+            self.announce(str(exc))
+            return
+        self.attach(text, msg.FROM_CLIPBOARD)
+
+    def read_attachments(self) -> None:
+        self.speaker.stop()
+        for n, text in enumerate(self.attachments, start=1):
+            if len(self.attachments) > 1:
+                self.speaker.say(msg.ATTACHMENT_N.format(n=n), self.ui_lang)
+            for line in text.splitlines():
+                if line.strip():
+                    self.speaker.say(line.strip())
 
     def tick(self, now: float) -> None:
         """Aviso de espera: mientras Claude trabaja sin que nada suene (piensa o ejecuta un
@@ -362,6 +408,9 @@ class App:
         prefix, rest = template.split("{text}")
         self.speaker.say(prefix.strip(" :"), self.ui_lang)
         self.speaker.say(text)
+        if self.attachments and kind != "answer":
+            self.speaker.say(msg.WITH_ATTACHMENTS.format(
+                count=msg.attachments_count(len(self.attachments))), self.ui_lang)
         self.speaker.say(rest.strip(" ."), self.ui_lang)
 
     # ---- preguntas con opciones ---------------------------------------------
@@ -552,7 +601,7 @@ class App:
             self.typing += text
             print(text, end="", flush=True)
         else:
-            self.announce(msg.PASTE_IGNORED)
+            self.attach(text, msg.PASTED)
 
     # ---- teclado -----------------------------------------------------------
     def handle_key(self, key: str) -> None:
@@ -563,7 +612,9 @@ class App:
         if self.question_active and self.handle_question_key(key):
             return
         if lower in "sntdp" and key.strip():
-            if not self.permissions:
+            if lower == "d" and not self.permissions and self.attachments:
+                self.read_attachments()
+            elif not self.permissions:
                 self.announce(msg.NO_PERMISSION_PENDING)
             elif lower == "s":
                 self.resolve_permission(permissions.ALLOW)
@@ -588,6 +639,8 @@ class App:
                     self.answer_question_free(text)
                 else:
                     self.send(text)
+            elif self.attachments and not self.permissions:
+                self.send("")  # solo los adjuntos
             else:
                 self.announce(msg.NOTHING_TO_SEND)
         elif key == "\x1b":
@@ -599,7 +652,11 @@ class App:
             elif self.pending_text:
                 self.pending_text, self.pending_kind = None, "message"
                 self.speaker.stop()
-                self.announce(msg.CANCELLED)
+                self.announce(msg.CANCELLED_KEEP_ATTACHMENTS if self.attachments else msg.CANCELLED)
+            elif self.attachments and not self.speaker.busy:
+                # Escape primero calla la lectura; con todo en silencio, quita los adjuntos.
+                self.attachments = []
+                self.announce(msg.ATTACHMENTS_REMOVED)
             else:
                 self.speaker.stop()
                 self.speaker.resume()
@@ -607,6 +664,8 @@ class App:
             self.interrupt()
         elif key in "eE":
             self.start_typing()
+        elif key in "vV":
+            self.attach_clipboard()
         elif key in "rR":
             self.speaker.stop()
             if not self.last_response:
@@ -675,6 +734,17 @@ class App:
             self.speaker.stop()
             print(msg.GOODBYE)
         return 0
+
+
+def compose_message(text: str, attachments: list[str]) -> str:
+    """Mensaje para Claude: lo dicho o escrito y, debajo, cada adjunto en un bloque."""
+    parts = [text] if text else []
+    for attachment in attachments:
+        # La valla es más larga que cualquier serie de comillas invertidas del adjunto.
+        longest = max((len(run) for run in re.findall(r"`+", attachment)), default=0)
+        fence = "`" * max(3, longest + 1)
+        parts.append(f"{fence}\n{attachment}\n{fence}")
+    return "\n\n".join(parts)
 
 
 def print_keys() -> None:

@@ -32,6 +32,7 @@ Esta rama prueba un enfoque 100 % local que no necesita GPU:
   curl -LsSf https://astral.sh/uv/install.sh | sh
   ```
 - Claude Code instalado y con sesión iniciada (el comando `claude` debe funcionar).
+- Opcional, para adjuntar el portapapeles con la tecla V: `wl-clipboard` si usas Wayland o `xclip` si usas X11 (`sudo apt install wl-clipboard xclip`).
 - La primera vez se descargan las voces (~60 MB por idioma, en `~/.local/share/lorito/voices`) y el modelo de Whisper (~500 MB, en `~/.cache/huggingface`).
 
 ### Instalación global
@@ -116,9 +117,11 @@ uv run pytest            # pruebas automáticas
 |---|---|
 | Espacio | Empezar / terminar de hablar |
 | Enter | Enviar lo dictado (tras escuchar la confirmación) |
-| Escape | Callar la lectura o cancelar el dictado |
+| Escape | Callar la lectura, cancelar el dictado o quitar los adjuntos |
 | I | Interrumpir a Claude mientras trabaja: se detiene y espera tus indicaciones |
-| E | Escribir un mensaje con el teclado |
+| E | Escribir un mensaje con el teclado (admite texto pegado de varias líneas) |
+| V | Adjuntar el texto del portapapeles al próximo mensaje |
+| D | Escuchar completos los textos adjuntos |
 | R | Repetir la última respuesta |
 | C | Leer el último bloque de código |
 | + / - | Cambiar la velocidad |
@@ -147,6 +150,18 @@ Cuando Claude te pregunta con opciones, lorito lee la pregunta y cada opción nu
 | Espacio / E | Responder con la voz o escribiendo: el número («la dos»), el nombre de la opción o tus propias palabras |
 | P | Repetir la pregunta |
 | N | No responder: Claude se detiene y espera tus indicaciones |
+
+### Adjuntar un texto largo (un error, un registro…)
+
+Para enviarle a Claude un texto copiado, sin tener que dictarlo:
+
+1. Pulsa **V** para adjuntar lo que hay en el portapapeles, o pega directamente en la terminal (Ctrl+Mayús+V). Lorito no lo lee entero: dice cuántas líneas tiene y cómo empieza.
+2. Dicta (Espacio) o escribe (E) tu mensaje, por ejemplo «Me sale este error al arrancar». La confirmación avisa de que va con el texto adjunto.
+3. Pulsa Enter: Claude recibe tu mensaje y, debajo, el texto adjunto en un bloque aparte. Con Enter sin mensaje se envía solo el adjunto.
+
+Puedes adjuntar varios textos antes de enviar. **D** los lee completos y **Escape** los quita (si algo se está leyendo, el primer Escape lo calla). Si pegas mientras escribes un mensaje con E, el texto se añade en el propio mensaje.
+
+Lo pegado en la terminal nunca se interpreta como teclas, así que sus letras no pueden permitir un comando ni cerrar lorito.
 
 ### Avisos mientras Claude trabaja
 

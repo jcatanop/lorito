@@ -17,9 +17,11 @@ KEYS_TITLE = "Teclas"
 KEYS = [
     ("Espacio", "Espacio", "empezar o terminar de hablar"),
     ("Enter", "Enter", "enviar lo que dictaste"),
-    ("Esc", "Escape", "callar la lectura o cancelar el dictado"),
+    ("Esc", "Escape", "callar la lectura, cancelar el dictado o quitar los adjuntos"),
     ("I", "I", "interrumpir a Claude mientras trabaja"),
     ("E", "E", "escribir un mensaje con el teclado"),
+    ("V", "Uve", "adjuntar el texto del portapapeles al próximo mensaje"),
+    ("D", "De", "escuchar completos los textos adjuntos"),
     ("R", "Erre", "repetir la última respuesta"),
     ("C", "Ce", "leer el último bloque de código"),
     ("+ / -", "Más y menos", "cambiar la velocidad"),
@@ -115,7 +117,25 @@ AGENT_EXITED = "{agent} se cerró."
 AGENT_EXITED_ERROR = "{agent} se cerró por un error, con código {code}."
 AGENT_EXITED_REASON = "{agent} se cerró por un error. El último mensaje fue:"
 TYPE_PROMPT = "Escribe tu mensaje y pulsa Enter: "
-PASTE_IGNORED = "Pegaste un texto. Para incluirlo, pulsa E y pégalo dentro del mensaje."
+FROM_CLIPBOARD = "del portapapeles"
+PASTED = "pegado"
+ATTACHED = "Adjunté el texto {source}, de {lines}. Empieza con:"
+ATTACHED_TOTAL = "Ya hay {count}."
+ATTACH_HINT = ("Ahora dicta o escribe tu mensaje, o pulsa Enter para enviarlo solo. "
+               "Pulsa de para escucharlo completo, o Escape para quitarlo.")
+WITH_ATTACHMENTS = "Con {count}."
+ATTACHMENT_N = "Adjunto {n}."
+ATTACHMENTS_REMOVED = "Adjuntos quitados."
+CANCELLED_KEEP_ATTACHMENTS = "Cancelado. Lo adjunto sigue preparado; Escape otra vez lo quita."
+CLIPBOARD_EMPTY = "El texto está vacío; no adjunté nada."
+
+
+def lines_count(n: int) -> str:
+    return "una línea" if n == 1 else f"{n} líneas"
+
+
+def attachments_count(n: int) -> str:
+    return "un texto adjunto" if n == 1 else f"{n} textos adjuntos"
 GOODBYE = "Hasta luego."
 LINK_TO = "enlace a {domain}"
 

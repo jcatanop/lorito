@@ -222,3 +222,62 @@ def test_paste_outside_typing_is_not_taken_as_keys(app):
     app.on_event(Event("permission", tool="Bash", request_id="r1"))
     app.handle_paste("s\nq\ni")
     assert app.session.calls == [] and app._running
+    assert app.attachments == ["s\nq\ni"]
+
+
+ERROR = 'Traceback (most recent call last):\n  File "app.py", line 12\nValueError: ```'
+
+
+def test_clipboard_attachment_goes_with_dictated_message(app, monkeypatch):
+    monkeypatch.setattr("lorito.cli.read_clipboard", lambda: ERROR + "\n")
+    app.handle_key("v")
+    said = " ".join(app.speaker.said)
+    assert "3 líneas" in said and "Traceback (most recent call last):" in said
+    assert ERROR not in app.speaker.said  # no se lee entero
+    app.confirm_text("Me sale este error", "message", msg.HEARD)
+    assert "Con un texto adjunto." in app.speaker.said
+    app.handle_key("\n")
+    assert app.session.sent == ["Me sale este error\n\n````\n" + ERROR + "\n````"]
+    assert app.attachments == []
+
+
+def test_attachment_alone_is_sent_with_enter(app):
+    app.handle_paste("línea 1\nlínea 2")
+    app.handle_key("\n")
+    assert app.session.sent == ["```\nlínea 1\nlínea 2\n```"]
+
+
+def test_detail_key_reads_attachment_and_escape_removes_it(app):
+    app.handle_paste("primera\n\nsegunda")
+    app.speaker.said.clear()
+    app.handle_key("d")
+    assert app.speaker.said == ["primera", "segunda"]
+    app.handle_key("\x1b")
+    assert app.attachments == [] and app.speaker.said[-1] == msg.ATTACHMENTS_REMOVED
+
+
+def test_cancelling_dictation_keeps_attachment(app):
+    app.handle_paste("error")
+    app.confirm_text("mira esto", "message", msg.HEARD)
+    app.handle_key("\x1b")
+    assert app.attachments == ["error"]
+    assert app.speaker.said[-1] == msg.CANCELLED_KEEP_ATTACHMENTS
+
+
+def test_clipboard_problem_is_spoken(app, monkeypatch):
+    from lorito.clipboard import NO_TOOL, ClipboardError
+
+    def fail():
+        raise ClipboardError(NO_TOOL)
+    monkeypatch.setattr("lorito.cli.read_clipboard", fail)
+    app.handle_key("v")
+    assert app.speaker.said[-1] == NO_TOOL and app.attachments == []
+
+
+def test_feedback_after_rejection_carries_attachment(app):
+    app.send("arregla el error")
+    app.on_event(Event("permission", tool="Bash", request_id="r1"))
+    app.handle_paste("log de error")
+    app.resolve_permission("feedback", "usa este registro")
+    app.on_event(Event("done"))
+    assert app.session.sent[-1] == "usa este registro\n\n```\nlog de error\n```"
