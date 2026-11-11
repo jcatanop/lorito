@@ -115,6 +115,7 @@ AGENT_EXITED = "{agent} se cerró."
 AGENT_EXITED_ERROR = "{agent} se cerró por un error, con código {code}."
 AGENT_EXITED_REASON = "{agent} se cerró por un error. El último mensaje fue:"
 TYPE_PROMPT = "Escribe tu mensaje y pulsa Enter: "
+PASTE_IGNORED = "Pegaste un texto. Para incluirlo, pulsa E y pégalo dentro del mensaje."
 GOODBYE = "Hasta luego."
 LINK_TO = "enlace a {domain}"
 

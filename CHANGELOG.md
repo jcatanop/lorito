@@ -3,6 +3,12 @@
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y el proyecto usa [versionado semántico](https://semver.org/lang/es/).
 La versión se define en un solo lugar: `src/lorito/__init__.py`.
 
+## [0.7.0] - 2026-11-11
+
+### Corregido
+- Pegar texto en la terminal ya no se interpreta como teclas. Antes, las letras de un texto pegado (un error largo, por ejemplo) podían permitir un comando, interrumpir a Claude o cerrar lorito. Ahora la terminal marca lo pegado (modo «bracketed paste») y lorito lo recibe como un solo bloque.
+- Los mensajes escritos con la tecla E admiten texto pegado de varias líneas; antes solo se tomaba la primera. La E usa ahora un editor propio: Retroceso borra, Ctrl+U borra todo, Enter envía y Escape cancela.
+
 ## [0.6.0] - 2026-11-11
 
 ### Añadido

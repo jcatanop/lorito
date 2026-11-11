@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import codecs
 import os
 import re
 import select
@@ -18,6 +19,7 @@ from . import messages as msg
 from . import permissions
 from .questions import TOOL_NAME as ASK_TOOL, QuestionFlow, match_options
 from .claude import ClaudeSession, Event
+from .keyinput import DISABLE_PASTE, ENABLE_PASTE, InputParser
 from .stt import Recorder, Transcriber
 from .textproc import CodeBlock, markdown_to_speech
 from .tts import DEFAULT_VOICES, Speaker
@@ -79,6 +81,7 @@ class App:
         # Qué es el texto pendiente: "message" (mensaje normal), "feedback" (indicación al
         # rechazar un permiso) o "answer" (respuesta libre a una pregunta con opciones).
         self.pending_kind = "message"
+        self.typing: str | None = None  # mensaje que se está escribiendo con la tecla E
         self.question: QuestionFlow | None = None  # pregunta con opciones en curso
         # Peticiones de permiso y preguntas en espera; la primera es la actual.
         self.permissions: list[Event] = []
@@ -229,7 +232,8 @@ class App:
         comando largo), un tic suave cada pocos segundos y, de vez en cuando, una frase.
         Así se distingue «sigue trabajando» de «se quedó colgado»."""
         interval = self.args.aviso_trabajo
-        if self.speaker.busy or self.recorder.recording or self.permissions or self.pending_text:
+        if (self.speaker.busy or self.recorder.recording or self.permissions or self.pending_text
+                or self.typing is not None):
             self._last_activity = now  # algo suena o se espera al usuario: no es silencio
             return
         if not self.working or interval <= 0 or now - self._last_activity < interval:
@@ -510,23 +514,51 @@ class App:
         else:
             self.send(text)
 
-    def type_message(self, fd: int, old_attrs) -> None:
+    # ---- escritura con la tecla E -----------------------------------------
+    # Editor propio en lugar de input(): input() solo lee la primera línea de un texto
+    # pegado y el resto llegaría como teclas sueltas.
+    def start_typing(self) -> None:
         self.speaker.stop()
+        self.typing = ""
         self.speaker.say(msg.TYPE_PROMPT, self.ui_lang)
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_attrs)
-        try:
-            text = input(msg.TYPE_PROMPT).strip()
-        except EOFError:
-            text = ""
-        finally:
-            tty.setcbreak(fd)
-        if not text:
+        print(msg.TYPE_PROMPT, end="", flush=True)
+
+    def handle_typing_key(self, key: str) -> None:
+        if key in ("\n", "\r"):
+            text, self.typing = self.typing.strip(), None
+            print(flush=True)
+            if text:
+                self.handle_text(text, confirm=False)
+            else:
+                self.announce(msg.CANCELLED)
+        elif key == "\x1b":
+            self.typing = None
+            print(flush=True)
             self.announce(msg.CANCELLED)
+        elif key in ("\x7f", "\b"):
+            if self.typing:
+                self.typing = self.typing[:-1]
+                print("\b \b", end="", flush=True)
+        elif key == "\x15":  # Ctrl+U: borrar todo lo escrito
+            print("\b \b" * len(self.typing), end="", flush=True)
+            self.typing = ""
+        elif key.isprintable():
+            self.typing += key
+            print(key, end="", flush=True)
+
+    def handle_paste(self, text: str) -> None:
+        if self.typing is not None:
+            # Dentro de un mensaje escrito, lo pegado se añade tal cual.
+            self.typing += text
+            print(text, end="", flush=True)
         else:
-            self.handle_text(text, confirm=False)
+            self.announce(msg.PASTE_IGNORED)
 
     # ---- teclado -----------------------------------------------------------
-    def handle_key(self, key: str, fd: int, old_attrs) -> None:
+    def handle_key(self, key: str) -> None:
+        if self.typing is not None:
+            self.handle_typing_key(key)
+            return
         lower = key.lower()
         if self.question_active and self.handle_question_key(key):
             return
@@ -574,7 +606,7 @@ class App:
         elif key in "iI":
             self.interrupt()
         elif key in "eE":
-            self.type_message(fd, old_attrs)
+            self.start_typing()
         elif key in "rR":
             self.speaker.stop()
             if not self.last_response:
@@ -615,23 +647,27 @@ class App:
         fd = sys.stdin.fileno()
         old_attrs = termios.tcgetattr(fd)
         tty.setcbreak(fd)
+        print(ENABLE_PASTE, end="", flush=True)
+        parser = InputParser()
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="ignore")
         try:
             while self._running:
-                ready, _, _ = select.select([fd], [], [], 0.2)
+                # Con algo a medias (un Escape suelto, un pegado) se espera muy poco: si no
+                # llega nada más, se resuelve (Escape solo es la tecla Escape).
+                ready, _, _ = select.select([fd], [], [], 0.05 if parser.pending else 0.2)
                 self.tick(time.monotonic())
-                if not ready:
-                    continue
-                key = os.read(fd, 1).decode(errors="ignore")
-                if key == "\x1b":
-                    # Las flechas y otras teclas especiales envían secuencias que empiezan
-                    # con Escape: se descartan para no confundirlas con la tecla Escape.
-                    if select.select([fd], [], [], 0.05)[0]:
-                        os.read(fd, 16)
-                        continue
-                self.handle_key(key, fd, old_attrs)
+                events = parser.feed(decoder.decode(os.read(fd, 4096))) if ready else parser.flush()
+                for kind, value in events:
+                    if not self._running:
+                        break
+                    if kind == "paste":
+                        self.handle_paste(value)
+                    else:
+                        self.handle_key(value)
         except KeyboardInterrupt:
             pass
         finally:
+            print(DISABLE_PASTE, end="", flush=True)
             termios.tcsetattr(fd, termios.TCSADRAIN, old_attrs)
             if self.recorder.recording:
                 self.recorder.stop()

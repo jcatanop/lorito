@@ -171,7 +171,7 @@ def test_plan_is_read_before_approval(app):
     assert "pide tu aprobación" in said
     assert "Crear nota.txt con el texto hola." in said
     assert app.speaker.said[-1] == msg.PLAN_OPTIONS
-    app.handle_key("s", None, None)
+    app.handle_key("s")
     assert app.session.calls == [f"allow:{msg.PLAN_TOOL}"]
     assert app.speaker.said[-1] == msg.PLAN_APPROVED
 
@@ -180,7 +180,7 @@ def test_plan_detail_rereads_plan_and_repeat_key_has_it(app):
     app.send("Planea crear nota.txt")
     app.on_event(plan_request())
     app.speaker.said.clear()
-    app.handle_key("d", None, None)
+    app.handle_key("d")
     assert "Crear nota.txt con el texto hola." in " ".join(app.speaker.said)
     assert any("Crear nota.txt" in para for para, _, _ in app.last_response)
 
@@ -188,5 +188,37 @@ def test_plan_detail_rereads_plan_and_repeat_key_has_it(app):
 def test_rejecting_plan_stops_claude(app):
     app.send("Planea crear nota.txt")
     app.on_event(plan_request())
-    app.handle_key("n", None, None)
+    app.handle_key("n")
     assert app.session.calls == [f"deny:{msg.PLAN_TOOL}"]
+
+
+def type_keys(app, text):
+    for ch in text:
+        app.handle_key(ch)
+
+
+def test_typed_message_with_pasted_multiline_text(app, capsys):
+    app.handle_key("e")
+    type_keys(app, "Mira este error: ")
+    app.handle_paste("Traceback:\n  línea 12\nquit()")
+    type_keys(app, "x\x7f")  # una letra y su borrado
+    app.handle_key("\n")
+    assert app.session.sent == ["Mira este error: Traceback:\n  línea 12\nquit()"]
+    assert app.typing is None
+
+
+def test_letters_while_typing_are_not_commands(app):
+    app.send("hola")
+    app.on_event(Event("permission", tool="Bash", request_id="r1"))
+    app.handle_key("E")
+    type_keys(app, "sin prisa")  # contiene s, n, i, p...
+    assert app.session.calls == []
+    app.handle_key("\x1b")
+    assert app.typing is None and app.speaker.said[-1] == msg.CANCELLED
+
+
+def test_paste_outside_typing_is_not_taken_as_keys(app):
+    app.send("hola")
+    app.on_event(Event("permission", tool="Bash", request_id="r1"))
+    app.handle_paste("s\nq\ni")
+    assert app.session.calls == [] and app._running
