@@ -31,6 +31,8 @@ TOOL_ANNOUNCE_DELAY = 0.4  # segundos
 # Un texto pegado mientras se escribe va dentro del mensaje si es corto y de una línea;
 # si no, se adjunta aparte (en el editor de una línea sería ilegible).
 INLINE_PASTE_MAX = 300
+# Con Claude trabajando, Q pide confirmación: una segunda Q en este plazo sale.
+QUIT_CONFIRM_SECONDS = 6
 # Líneas de diagnóstico interno de Claude Code ("[claude-code:unrecognized_model] {...}"):
 # no explican el problema a una persona, así que no se leen como causa de un cierre.
 # Cada cuántos tics de espera se dice en voz alta que Claude sigue trabajando.
@@ -112,6 +114,7 @@ class App:
         self._last_activity = time.monotonic()  # último sonido o evento, para el aviso de espera
         self._waiting_ticks = 0
         self._running = True
+        self._quit_armed_at: float | None = None  # momento de la primera Q con Claude trabajando
 
     # ---- salida ------------------------------------------------------------
     @property
@@ -319,6 +322,17 @@ class App:
             for line in text.splitlines():
                 if line.strip():
                     self.speaker.say(line.strip())
+
+    def request_quit(self) -> None:
+        """Q sale; si Claude está a mitad de una tarea, primero pide confirmación."""
+        now = time.monotonic()
+        armed = self._quit_armed_at is not None and now - self._quit_armed_at < QUIT_CONFIRM_SECONDS
+        if not self.working or armed:
+            self._running = False
+            return
+        self._quit_armed_at = now
+        self.speaker.stop()
+        self.announce(msg.QUIT_CONFIRM)
 
     def tick(self, now: float) -> None:
         """Aviso de espera: mientras Claude trabaja sin que nada suene (piensa o ejecuta un
@@ -659,6 +673,8 @@ class App:
         if key in SPECIAL_KEYS:
             return  # flechas y similares solo sirven al escribir
         lower = key.lower()
+        if lower != "q":
+            self._quit_armed_at = None  # otra tecla: se sigue trabajando
         if self.question_active and self.handle_question_key(key):
             return
         if lower in "sntdp" and key.strip():
@@ -738,7 +754,7 @@ class App:
             print_keys()
             self.speaker.say(msg.HELP, self.ui_lang)
         elif key in "qQ":
-            self._running = False
+            self.request_quit()
 
     @staticmethod
     def session_name(command: list[str]) -> str:

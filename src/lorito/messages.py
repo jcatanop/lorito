@@ -26,7 +26,7 @@ KEYS = [
     ("C", "Ce", "leer el último bloque de código"),
     ("+ / -", "Más y menos", "cambiar la velocidad"),
     ("H", "Hache", "escuchar esta ayuda"),
-    ("Q", "Cu", "salir"),
+    ("Q", "Cu", "salir; si Claude está trabajando, pide confirmación"),
 ]
 PERMISSION_KEYS_TITLE = "Cuando Claude pide permiso"
 PERMISSION_KEYS = [
@@ -137,6 +137,8 @@ def lines_count(n: int) -> str:
 def attachments_count(n: int) -> str:
     return "un texto adjunto" if n == 1 else f"{n} textos adjuntos"
 GOODBYE = "Hasta luego."
+QUIT_CONFIRM = ("Claude está trabajando y se detendría a medias. Pulsa cu otra vez para salir, "
+                "o cualquier otra tecla para seguir.")
 LINK_TO = "enlace a {domain}"
 
 

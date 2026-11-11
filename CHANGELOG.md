@@ -5,6 +5,9 @@ La versión se define en un solo lugar: `src/lorito/__init__.py`.
 
 ## [0.9.0] - 2026-11-11
 
+### Cambiado
+- Si Claude está trabajando, Q pide confirmación antes de salir (Q otra vez en unos segundos), para no dejar una tarea a medias por una pulsación accidental.
+
 ### Corregido
 - Concurrencia: los mensajes de Claude, los anuncios diferidos, el dictado y el teclado ya no modifican el estado a la vez. Antes, una tecla pulsada justo cuando llegaba otra petición podía aprobar la petición equivocada o provocar un fallo.
 

@@ -325,3 +325,29 @@ def test_transcription_result_waits_for_the_lock(app):
     app._lock.release()
     t.join(1)
     assert app.pending_text == "hola"
+
+
+def test_quit_when_idle_is_immediate(app):
+    app.handle_key("q")
+    assert not app._running
+
+
+def test_quit_while_working_asks_first(app):
+    app.send("revisa el proyecto")
+    app.handle_key("q")
+    assert app._running and app.speaker.said[-1] == msg.QUIT_CONFIRM
+    app.handle_key("Q")
+    assert not app._running
+
+
+def test_other_key_or_timeout_cancels_quit(app, monkeypatch):
+    import lorito.cli as cli
+    app.send("revisa el proyecto")
+    app.handle_key("q")
+    app.handle_key("r")  # otra tecla: se sigue
+    app.handle_key("q")
+    assert app._running  # vuelve a preguntar
+    now = app._quit_armed_at
+    monkeypatch.setattr(cli.time, "monotonic", lambda: now + cli.QUIT_CONFIRM_SECONDS + 1)
+    app.handle_key("q")
+    assert app._running  # pasó el plazo: vuelve a preguntar

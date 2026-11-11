@@ -126,7 +126,7 @@ uv run pytest            # pruebas automáticas
 | C | Leer el último bloque de código |
 | + / - | Cambiar la velocidad |
 | H | Ayuda hablada |
-| Q | Salir |
+| Q | Salir. Si Claude está trabajando, pide confirmación: Q otra vez para salir |
 
 Cuando Claude pide permiso para usar una herramienta, lorito emite un pitido y lee la petición:
 
