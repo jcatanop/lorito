@@ -6,14 +6,24 @@ from pathlib import PurePath
 
 UI_LANG = "es"
 
-READY = "Speaker listo. Pulsa espacio para hablar y hache para escuchar la ayuda."
-HELP = (
-    "Teclas disponibles. Espacio: empezar o terminar de hablar. "
-    "Enter: enviar lo que dictaste. Escape: callar la lectura o cancelar el dictado. "
-    "E: escribir un mensaje con el teclado. R: repetir la última respuesta. "
-    "C: leer el último bloque de código. Más y menos: cambiar la velocidad. "
-    "Q: salir."
-)
+READY = "Speaker versión {version} listo. Pulsa espacio para hablar y hache para escuchar la ayuda."
+WELCOME_TITLE = "Speaker {version}"
+WELCOME_SUBTITLE = "Lectura en voz alta para {agent}"
+KEYS_TITLE = "Teclas"
+
+# (tecla en pantalla, nombre hablado, acción). Única fuente para la bienvenida y la ayuda.
+KEYS = [
+    ("Espacio", "Espacio", "empezar o terminar de hablar"),
+    ("Enter", "Enter", "enviar lo que dictaste"),
+    ("Esc", "Escape", "callar la lectura o cancelar el dictado"),
+    ("E", "E", "escribir un mensaje con el teclado"),
+    ("R", "Erre", "repetir la última respuesta"),
+    ("C", "Ce", "leer el último bloque de código"),
+    ("+ / -", "Más y menos", "cambiar la velocidad"),
+    ("H", "Hache", "escuchar esta ayuda"),
+    ("Q", "Cu", "salir"),
+]
+HELP = "Teclas disponibles. " + " ".join(f"{spoken}: {action}." for _, spoken, action in KEYS)
 LOADING_VOICES = "Preparando voces"
 LOADING_STT = "Cargando el modelo de reconocimiento de voz"
 STT_NOT_READY = "El reconocimiento de voz todavía se está cargando. Espera un momento."

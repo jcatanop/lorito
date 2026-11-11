@@ -11,13 +11,14 @@ import termios
 import threading
 import tty
 
+from . import __version__, full_version
 from . import messages as msg
 from .claude import ClaudeSession, Event
 from .stt import Recorder, Transcriber
 from .textproc import CodeBlock, markdown_to_speech
 from .tts import DEFAULT_VOICES, Speaker
 
-DIM, RESET, CYAN = "\033[2m", "\033[0m", "\033[36m"
+DIM, RESET, CYAN, BOLD = "\033[2m", "\033[0m", "\033[36m", "\033[1m"
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -26,6 +27,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         description="Lee en voz alta las respuestas de un asistente de IA y permite dictarle por voz.",
         epilog="Ejemplo: speaker --idiomas es,en claude --permission-mode acceptEdits",
     )
+    p.add_argument("-V", "--version", action="version", version=f"speaker {full_version()}")
     p.add_argument("--idiomas", default="es,en",
                    help=f"idiomas a reconocer al leer, separados por comas; el primero es el "
                         f"principal (disponibles: {','.join(DEFAULT_VOICES)})")
@@ -209,16 +211,23 @@ class App:
             self.announce(msg.SPEED.format(value=str(value).replace(".", ",")))
         elif key in "hH?":
             self.speaker.stop()
-            self.announce(msg.HELP)
+            print_keys()
+            self.speaker.say(msg.HELP, self.ui_lang)
         elif key in "qQ":
             self._running = False
 
+    @staticmethod
+    def session_name(command: list[str]) -> str:
+        return ClaudeSession.name
+
     def run(self, command: list[str]) -> int:
+        print_welcome(self.session_name(command))
         print(f"{DIM}» {msg.LOADING_VOICES}…{RESET}", flush=True)
         self.speaker.prepare()
         self.transcriber = Transcriber(self.args.modelo_voz, self.args.idioma_dictado)
         self.session = ClaudeSession(command[0], command[1:], self.on_event)
-        self.announce(msg.READY)
+        print(f"{DIM}» {msg.READY.format(version=__version__)}{RESET}", flush=True)
+        self.speaker.say(msg.READY.format(version=__version__.replace(".", " punto ")), self.ui_lang)
 
         fd = sys.stdin.fileno()
         old_attrs = termios.tcgetattr(fd)
@@ -246,6 +255,25 @@ class App:
             self.speaker.stop()
             print(msg.GOODBYE)
         return 0
+
+
+def print_keys() -> None:
+    width = max(len(k) for k, _, _ in msg.KEYS)
+    print(f"{BOLD}{msg.KEYS_TITLE}{RESET}")
+    for key, _, action in msg.KEYS:
+        print(f"  {CYAN}{key.ljust(width)}{RESET}  {action[0].upper()}{action[1:]}")
+    print(flush=True)
+
+
+def print_welcome(agent: str) -> None:
+    title = msg.WELCOME_TITLE.format(version=full_version())
+    subtitle = msg.WELCOME_SUBTITLE.format(agent=agent)
+    width = max(len(title), len(subtitle)) + 4
+    print(f"╭{'─' * width}╮")
+    print(f"│  {BOLD}{title.ljust(width - 2)}{RESET}│")
+    print(f"│  {subtitle.ljust(width - 2)}│")
+    print(f"╰{'─' * width}╯\n")
+    print_keys()
 
 
 def main(argv: list[str] | None = None) -> int:
