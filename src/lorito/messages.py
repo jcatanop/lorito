@@ -137,6 +137,14 @@ def lines_count(n: int) -> str:
 def attachments_count(n: int) -> str:
     return "un texto adjunto" if n == 1 else f"{n} textos adjuntos"
 GOODBYE = "Hasta luego."
+VERSION_TESTED = "Claude Code {version}, versión probada con lorito."
+VERSION_UNTESTED = ("Aviso: Claude Code está en la versión {installed} y lorito se probó con la "
+                    "{tested}. Si algo no funciona como esperas, puede deberse a ese cambio.")
+VERSION_UNKNOWN = "Aviso: no pude averiguar la versión de Claude Code."
+
+
+def spoken_version(version: str) -> str:
+    return version.replace(".", " punto ")
 QUIT_CONFIRM = ("Claude está trabajando y se detendría a medias. Pulsa cu otra vez para salir, "
                 "o cualquier otra tecla para seguir.")
 LINK_TO = "enlace a {domain}"

@@ -19,7 +19,7 @@ from . import __version__, full_version
 from . import messages as msg
 from . import permissions
 from .questions import TOOL_NAME as ASK_TOOL, QuestionFlow, match_options
-from .claude import ClaudeSession, Event
+from .claude import TESTED_VERSION, ClaudeSession, Event, first_warning_for, installed_version
 from .clipboard import ClipboardError, read_clipboard
 from .editor import CANCEL, SUBMIT, LineEditor
 from .keyinput import DISABLE_PASTE, ENABLE_PASTE, SPECIAL_KEYS, InputParser
@@ -760,11 +760,28 @@ class App:
     def session_name(command: list[str]) -> str:
         return ClaudeSession.name
 
+    def check_claude_version(self, executable: str) -> None:
+        """Avisa si Claude Code no está en la versión con la que se probó lorito: en voz alta
+        la primera vez para cada versión nueva, y después solo en pantalla."""
+        installed = installed_version(executable)
+        if installed is None:
+            self.announce(msg.VERSION_UNKNOWN)
+        elif installed == TESTED_VERSION:
+            print(f"{DIM}» {msg.VERSION_TESTED.format(version=installed)}{RESET}", flush=True)
+        else:
+            warning = msg.VERSION_UNTESTED.format(installed=installed, tested=TESTED_VERSION)
+            print(f"{BOLD}» {warning}{RESET}", flush=True)
+            if first_warning_for(installed):
+                self.speaker.say(msg.VERSION_UNTESTED.format(
+                    installed=msg.spoken_version(installed),
+                    tested=msg.spoken_version(TESTED_VERSION)), self.ui_lang)
+
     def run(self, command: list[str]) -> int:
         print_welcome(self.session_name(command))
         print(f"{DIM}» {msg.LOADING_VOICES}…{RESET}", flush=True)
         self.speaker.prepare()
         self.transcriber = Transcriber(self.args.modelo_voz, self.args.idioma_dictado)
+        self.check_claude_version(command[0])
         self.session = ClaudeSession(command[0], command[1:], self.on_event)
         print(f"{DIM}» {msg.READY.format(version=__version__)}{RESET}", flush=True)
         self.speaker.say(msg.READY.format(version=__version__.replace(".", " punto ")), self.ui_lang)

@@ -351,3 +351,18 @@ def test_other_key_or_timeout_cancels_quit(app, monkeypatch):
     monkeypatch.setattr(cli.time, "monotonic", lambda: now + cli.QUIT_CONFIRM_SECONDS + 1)
     app.handle_key("q")
     assert app._running  # pasó el plazo: vuelve a preguntar
+
+
+def test_version_warning(app, tmp_path, monkeypatch, capsys):
+    import lorito.cli as cli
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "installed_version", lambda exe: cli.TESTED_VERSION)
+    app.check_claude_version("claude")
+    assert app.speaker.said == []  # versión probada: solo en pantalla
+    monkeypatch.setattr(cli, "installed_version", lambda exe: "9.9.9")
+    app.check_claude_version("claude")
+    assert "9 punto 9 punto 9" in app.speaker.said[-1]
+    app.speaker.said.clear()
+    app.check_claude_version("claude")
+    assert app.speaker.said == []  # ya avisada: solo en pantalla
+    assert "9.9.9" in capsys.readouterr().out

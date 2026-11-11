@@ -8,13 +8,21 @@ resultado de un comando, y no hay que adivinar qué partes de la pantalla son ó
 from __future__ import annotations
 
 import json
+import os
+import re
 import subprocess
 import sys
 import threading
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable
+
+# Versión de Claude Code con la que se probó lorito. El modo stream-json y el protocolo de
+# permisos por stdio están poco documentados y pueden cambiar entre versiones: tras probar
+# lorito con una versión nueva, actualiza este valor.
+TESTED_VERSION = "2.1.322"
 
 # "--permission-prompt-tool stdio" hace que las peticiones de permiso lleguen como mensajes
 # "control_request" por stdout y se respondan con "control_response" por stdin.
@@ -23,6 +31,35 @@ BASE_ARGS = ["-p", "--input-format", "stream-json", "--output-format", "stream-j
 
 DENY_MESSAGE = ("The user rejected this action. Stop what you are doing and wait for the user "
                 "to tell you how to proceed.")
+
+
+def installed_version(executable: str) -> str | None:
+    """Versión de Claude Code instalada ("2.1.322"), o None si no se pudo averiguar."""
+    try:
+        out = subprocess.run([executable, "--version"], capture_output=True, text=True,
+                             timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    found = re.search(r"\d+\.\d+\.\d+", out)
+    return found.group(0) if found else None
+
+
+def first_warning_for(version: str) -> bool:
+    """True la primera vez que se avisa de esta versión no probada (y la recuerda), para
+    decirlo en voz alta una sola vez y no en cada arranque."""
+    base = os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share"
+    state = Path(base) / "lorito" / "version-claude-avisada"
+    try:
+        if state.read_text().strip() == version:
+            return False
+    except OSError:
+        pass
+    try:
+        state.parent.mkdir(parents=True, exist_ok=True)
+        state.write_text(version)
+    except OSError:
+        pass
+    return True
 
 
 @dataclass

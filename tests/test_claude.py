@@ -29,3 +29,25 @@ def test_interrupted_result_has_no_reason():
 def test_successful_result_does_not_repeat_the_answer():
     [ev] = _parse({"type": "result", "subtype": "success", "is_error": False, "result": "Hola"})
     assert not ev.error and ev.text == ""
+
+
+def fake_claude(tmp_path, output):
+    path = tmp_path / "claude"
+    path.write_text(f"#!/bin/sh\necho '{output}'\n")
+    path.chmod(0o755)
+    return str(path)
+
+
+def test_installed_version(tmp_path):
+    from lorito.claude import installed_version
+    assert installed_version(fake_claude(tmp_path, "2.1.322 (Claude Code)")) == "2.1.322"
+    assert installed_version(fake_claude(tmp_path, "algo raro")) is None
+    assert installed_version(str(tmp_path / "no-existe")) is None
+
+
+def test_untested_version_is_spoken_only_once(tmp_path, monkeypatch):
+    from lorito.claude import first_warning_for
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path))
+    assert first_warning_for("2.2.0")
+    assert not first_warning_for("2.2.0")
+    assert first_warning_for("2.2.1")

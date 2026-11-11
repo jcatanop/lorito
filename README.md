@@ -182,6 +182,10 @@ Si lo que llega de Claude aparece mientras escribes, se muestra encima y tu lín
 
 Cuando Claude piensa o ejecuta algo largo, puede pasar un rato sin nada que leer. Para que se distinga «sigue trabajando» de «se quedó colgado», lorito emite un tic suave cada 8 segundos de silencio y, cada 6 tics (unos 48 segundos), dice «Claude sigue trabajando». Se ajusta con `--aviso-trabajo SEGUNDOS`; `--aviso-trabajo 0` lo desactiva.
 
+### Compatibilidad con Claude Code
+
+Lorito se comunica con Claude Code a través de su modo `stream-json`, que está poco documentado y puede cambiar entre versiones. La versión con la que se probó está en `TESTED_VERSION` (`src/lorito/claude.py`). Al arrancar, si la versión instalada es otra, lorito lo avisa en voz alta la primera vez para cada versión nueva y, después, solo en pantalla. Tras comprobar que todo funciona con una versión nueva, actualiza `TESTED_VERSION`.
+
 ### Limitaciones conocidas
 
 - Las terminales no informan de cuándo se suelta una tecla, por eso el dictado funciona pulsando una vez para empezar y otra para terminar.

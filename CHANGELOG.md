@@ -5,6 +5,9 @@ La versión se define en un solo lugar: `src/lorito/__init__.py`.
 
 ## [0.9.0] - 2026-11-11
 
+### Añadido
+- Comprobación de la versión de Claude Code al arrancar. Si no es la probada (`TESTED_VERSION`, ahora 2.1.322), se avisa en voz alta la primera vez para cada versión nueva y después solo en pantalla.
+
 ### Cambiado
 - Si Claude está trabajando, Q pide confirmación antes de salir (Q otra vez en unos segundos), para no dejar una tarea a medias por una pulsación accidental.
 
